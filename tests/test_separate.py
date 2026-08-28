@@ -13,7 +13,15 @@ from pathlib import Path
 
 import pytest
 
-from pianoizer.stages.separate import SAMPLE_RATE, STEM_NAME, separate
+from pianoizer.model import Note, save_midi
+from pianoizer.stages.separate import (
+    DEFAULT_STEMS,
+    SAMPLE_RATE,
+    STEM_NAME,
+    merge_midi,
+    separate,
+    separate_all,
+)
 
 
 def _demucs_available() -> bool:
@@ -125,3 +133,105 @@ def test_separate_unknown_stem_raises(tmp_path):
 
     with pytest.raises(ValueError):
         separate(str(audio), str(tmp_path), stem="nope")
+
+
+def test_separate_all_default_stems_constant():
+    assert DEFAULT_STEMS == ("other", "vocals", "bass")
+
+
+@pytest.mark.skipif(not HAVE_DEMUCS, reason="demucs not installed")
+def test_separate_all_creates_requested_stems(tmp_path):
+    audio = tmp_path / "tone.wav"
+    _write_tone_wav(audio, freq=440.0, seconds=1.5)
+
+    stems = ("other", "vocals")
+    out = separate_all(str(audio), str(tmp_path), stems=stems)
+
+    assert set(out) == set(stems)
+    for name in stems:
+        p = Path(out[name])
+        assert p == tmp_path / f"stem_{name}.wav"
+        assert p.exists()
+        assert p.stat().st_size > 0
+        with wave.open(str(p), "rb") as w:
+            assert w.getframerate() == SAMPLE_RATE
+
+
+@pytest.mark.skipif(not HAVE_DEMUCS, reason="demucs not installed")
+def test_separate_all_unknown_stem_raises(tmp_path):
+    audio = tmp_path / "tone.wav"
+    _write_tone_wav(audio, seconds=1.0)
+
+    with pytest.raises(ValueError):
+        separate_all(str(audio), str(tmp_path), stems=("other", "nope"))
+
+
+def test_separate_all_missing_audio_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        separate_all(str(tmp_path / "nope.wav"), str(tmp_path))
+
+
+def test_separate_all_empty_stems_raises(tmp_path):
+    audio = tmp_path / "tone.wav"
+    _write_tone_wav(audio, seconds=0.5)
+    with pytest.raises(ValueError):
+        separate_all(str(audio), str(tmp_path), stems=())
+
+
+def _write_notes_midi(path: Path, notes: list[Note]) -> None:
+    save_midi(notes, str(path))
+
+
+def test_merge_midi_dedupes_overlapping_notes(tmp_path):
+    # Two stems both detect the same C4 note at ~the same onset (within 50ms).
+    a = tmp_path / "a.mid"
+    b = tmp_path / "b.mid"
+    _write_notes_midi(a, [Note(start=1.0, end=1.5, pitch=60, velocity=90)])
+    _write_notes_midi(b, [Note(start=1.02, end=1.6, pitch=60, velocity=110)])
+
+    merged = merge_midi([str(a), str(b)])
+
+    assert len(merged) == 1
+    m = merged[0]
+    assert m.pitch == 60
+    # Span widened to the union, velocity is the louder detection.
+    assert m.start == pytest.approx(1.0)
+    assert m.end == pytest.approx(1.6)
+    assert m.velocity == 110
+
+
+def test_merge_midi_preserves_distinct_notes(tmp_path):
+    a = tmp_path / "a.mid"
+    b = tmp_path / "b.mid"
+    # Different pitch, and same pitch far apart in time -> all distinct.
+    _write_notes_midi(a, [
+        Note(start=0.0, end=0.5, pitch=60, velocity=80),
+        Note(start=2.0, end=2.5, pitch=60, velocity=80),
+    ])
+    _write_notes_midi(b, [
+        Note(start=0.0, end=0.5, pitch=67, velocity=80),
+    ])
+
+    merged = merge_midi([str(a), str(b)])
+
+    assert len(merged) == 3
+    pitches = sorted((n.pitch, round(n.start, 2)) for n in merged)
+    assert pitches == [(60, 0.0), (60, 2.0), (67, 0.0)]
+    # Sorted by start then pitch.
+    starts = [round(n.start, 2) for n in merged]
+    assert starts == sorted(starts)
+
+
+def test_merge_midi_beyond_window_kept_separate(tmp_path):
+    a = tmp_path / "a.mid"
+    b = tmp_path / "b.mid"
+    # Same pitch, onsets 60ms apart (> 50ms window) -> kept separate.
+    _write_notes_midi(a, [Note(start=1.0, end=1.5, pitch=64, velocity=80)])
+    _write_notes_midi(b, [Note(start=1.06, end=1.5, pitch=64, velocity=80)])
+
+    merged = merge_midi([str(a), str(b)])
+    assert len(merged) == 2
+
+
+def test_merge_midi_empty_returns_empty():
+    assert merge_midi([]) == []
