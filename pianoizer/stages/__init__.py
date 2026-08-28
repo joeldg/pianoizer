@@ -5,6 +5,6 @@ Submodules are imported here so the pipeline can reference them as
 Importing ``transcribe`` is safe: its heavy basic-pitch import is lazy (inside
 the function), so module import stays light.
 """
-from . import fetch, mux, render, transcribe  # noqa: F401
+from . import fetch, mux, render, separate, transcribe  # noqa: F401
 
-__all__ = ["fetch", "mux", "render", "transcribe"]
+__all__ = ["fetch", "mux", "render", "separate", "transcribe"]
