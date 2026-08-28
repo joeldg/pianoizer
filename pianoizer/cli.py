@@ -47,6 +47,9 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         particles=getattr(args, "particles", False),
         particle_intensity=getattr(args, "particle_intensity", 0.6),
         hand_split=getattr(args, "hand_split", False),
+        fit_keys=getattr(args, "fit_keys", False),
+        fit_pad=getattr(args, "fit_pad", 2),
+        label_scale=getattr(args, "label_scale", 1.0),
         hw_encode=getattr(args, "hw_encode", False),
         encode_bitrate=getattr(args, "encode_bitrate", None),
     )
@@ -96,6 +99,15 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
                         help="Particle peak alpha/count in [0,1] (default 0.6)")
     parser.add_argument("--hand-split", action="store_true",
                         help="Split falling notes into left/right lanes")
+    parser.add_argument("--fit-keys", action="store_true",
+                        help="Trim unused edge keys to the song's pitch range "
+                             "so the used keys (and labels) render larger")
+    parser.add_argument("--fit-pad", type=int, default=2, metavar="N",
+                        help="Semitones of margin each side for --fit-keys "
+                             "(default 2)")
+    parser.add_argument("--label-scale", type=float, default=1.0, metavar="F",
+                        help="Multiplier on the key note-letter font size "
+                             "(default 1.0; try 1.5 for bigger letters)")
     parser.add_argument("--flash-ripple", action="store_true",
                         help="Expanding ripple outlines at note onset")
     parser.add_argument("--hw-encode", action="store_true",
