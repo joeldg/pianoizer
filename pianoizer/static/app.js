@@ -20,9 +20,58 @@ const hidden = new Set();
 // A pre-uploaded source path (from drag-drop), if any.
 let uploadedSource = null;
 
+// Full ordered pipeline (separate only runs when requested; it may be skipped).
+const STAGES = ["fetch", "separate", "transcribe", "postprocess", "render", "mux"];
+
+// Human-readable label per raw stage token.
+const STAGE_LABELS = {
+  fetch: "Downloading audio",
+  separate: "Isolating instrument",
+  transcribe: "Transcribing to MIDI",
+  postprocess: "Cleaning up notes",
+  render: "Rendering falling-notes frames",
+  mux: "Encoding video + audio",
+};
+
+// Short "what it's doing" one-liner per raw stage.
+const STAGE_DETAILS = {
+  fetch: "Fetching and decoding the source audio.",
+  separate: "Splitting the mix to isolate the instrument.",
+  transcribe: "Detecting notes and building a MIDI transcription.",
+  postprocess: "Merging, quantising, and tidying the detected notes.",
+  render: "Drawing each falling-notes frame.",
+  mux: "Encoding the final video with ffmpeg \u2014 this is usually the slowest step.",
+};
+
+function stageLabel(stage) {
+  if (!stage) return null;
+  return STAGE_LABELS[stage] || stage;
+}
+
+function stageDetail(stage) {
+  if (!stage) return null;
+  return STAGE_DETAILS[stage] || null;
+}
+
+// 1-based step index within the full pipeline, or null if unknown.
+function stageStep(stage) {
+  if (!stage) return null;
+  const i = STAGES.indexOf(stage);
+  return i >= 0 ? i + 1 : null;
+}
+
 function pct(job) {
   const p = typeof job.progress === "number" ? job.progress : 0;
   return Math.max(0, Math.min(100, Math.round(p * 100)));
+}
+
+// Visual bar fill: never claim 100% mid-run. 0% while queued, capped at 95%
+// while running, exactly 100% only when done.
+function displayPct(job) {
+  if (job.status === "done") return 100;
+  if (job.status === "error" || job.status === "failed") return pct(job);
+  if (job.status === "queued") return 0;
+  return Math.min(95, pct(job));
 }
 
 function statusClass(status) {
@@ -106,26 +155,76 @@ function renderJob(job) {
   st.textContent = job.status || "queued";
   head.append(src, st);
 
+  const shownPct = displayPct(job);
+  const queued = job.status === "queued";
   const bar = document.createElement("div");
-  bar.className = "bar";
+  bar.className = "bar" + (queued ? " queued" : "");
   bar.setAttribute("role", "progressbar");
   bar.setAttribute("aria-valuemin", "0");
   bar.setAttribute("aria-valuemax", "100");
-  bar.setAttribute("aria-valuenow", String(pct(job)));
+  bar.setAttribute("aria-valuenow", String(shownPct));
   const fill = document.createElement("span");
-  fill.style.width = pct(job) + "%";
+  fill.style.width = shownPct + "%";
   const label = document.createElement("em");
   label.className = "bar-label";
-  const stageTxt = job.stage ? job.stage : (job.status || "queued");
-  label.textContent = stageTxt + " \u00b7 " + pct(job) + "%";
+  // Friendly stage label + "step N of 6" while active; status otherwise.
+  let barText;
+  if (done) {
+    barText = "Done \u00b7 100%";
+  } else if (failed) {
+    barText = "Error";
+  } else if (job.stage) {
+    const step = stageStep(job.stage);
+    const stepTxt = step ? " \u00b7 step " + step + " of " + STAGES.length : "";
+    barText = stageLabel(job.stage) + stepTxt + " \u00b7 " + shownPct + "%";
+  } else {
+    barText = (job.status || "queued") + " \u00b7 " + shownPct + "%";
+  }
+  label.textContent = barText;
   bar.append(fill, label);
+
+  // Compact horizontal stepper of the pipeline stages.
+  const stepper = document.createElement("ol");
+  stepper.className = "stepper";
+  stepper.setAttribute("aria-hidden", "true");
+  const curIdx = job.stage ? STAGES.indexOf(job.stage) : -1;
+  for (let i = 0; i < STAGES.length; i++) {
+    const stage = STAGES[i];
+    // Hide separate unless the job actually entered it or is past it.
+    if (stage === "separate" && curIdx < i) continue;
+    const step = document.createElement("li");
+    let cls = "step";
+    if (done || (curIdx >= 0 && curIdx > i)) cls += " complete";
+    else if (curIdx === i && active) cls += " current";
+    else cls += " pending";
+    step.className = cls;
+    step.title = stageLabel(stage);
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.textContent = (done || (curIdx >= 0 && curIdx > i)) ? "\u2713" : String(i + 1);
+    step.append(dot);
+    stepper.append(step);
+  }
+
+  // "What it's doing" muted detail line.
+  const detail = document.createElement("div");
+  detail.className = "detail";
+  if (active && job.stage) {
+    detail.textContent = stageDetail(job.stage) || stageLabel(job.stage) || "";
+  } else if (queued) {
+    detail.textContent = "Waiting for a free worker\u2026";
+  } else {
+    detail.textContent = "";
+  }
 
   const meta = document.createElement("div");
   meta.className = "meta";
   const t = timing(job);
   meta.textContent = "id: " + job.id + (t ? " \u00b7 " + t : "");
 
-  li.append(head, bar, meta);
+  li.append(head, bar, stepper);
+  if (detail.textContent) li.append(detail);
+  li.append(meta);
 
   const actions = document.createElement("div");
   actions.className = "actions";

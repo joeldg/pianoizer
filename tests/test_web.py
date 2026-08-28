@@ -67,6 +67,21 @@ def test_index_serves_html(client):
     assert "Pianoizer" in resp.text
 
 
+def test_static_assets_have_progress_detail(client):
+    """The static JS wires friendly stage labels, a step counter, and a
+    capped-while-running progress bar (M5-5). Read-only sanity checks."""
+    js = client.get("/static/app.js")
+    assert js.status_code == 200
+    body = js.text
+    # Friendly stage labels + detail one-liners.
+    assert "Encoding video + audio" in body
+    assert "STAGE_LABELS" in body and "STAGE_DETAILS" in body
+    # Step counter and full ordered pipeline.
+    assert "step" in body and "STAGES" in body
+    # No false 100% mid-run: bar is capped while running.
+    assert "displayPct" in body and "Math.min(95" in body
+
+
 def test_submit_returns_202_and_job_dict(client):
     resp = client.post("/api/jobs", json={"source": "https://youtu.be/abc123"})
     assert resp.status_code == 202
