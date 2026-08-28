@@ -15,7 +15,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-
 _MISSING_DEP_MSG = (
     "basic-pitch is not installed. Install the optional transcription "
     "dependencies with:\n\n    uv sync --extra transcribe\n"

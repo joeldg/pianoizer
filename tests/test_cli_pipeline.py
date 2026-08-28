@@ -1,6 +1,4 @@
-import os
 
-import pytest
 
 from pianoizer import cli
 from pianoizer.config import RenderConfig
@@ -78,7 +76,7 @@ def test_missing_dep_returns_code_4(monkeypatch, tmp_path):
 
 def test_config_file_precedence(tmp_path):
     """CLI flags override config-file values; file fills unset keys."""
-    from pianoizer.cli import _load_file_values, _apply_config_file, build_pipeline_parser
+    from pianoizer.cli import _apply_config_file, _load_file_values, build_pipeline_parser
     cfg_toml = tmp_path / "pianoizer.toml"
     cfg_toml.write_text("[pianoizer]\nfps = 60\nlead_time = 2.0\nhands = true\n")
     argv = ["src.wav", "--out", "o.mp4", "--config", str(cfg_toml), "--fps", "30"]

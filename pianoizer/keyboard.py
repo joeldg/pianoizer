@@ -5,8 +5,8 @@ MIDI 60 == "C4". See DESIGN.md 5.2.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 BLACK_PITCH_CLASSES = {1, 3, 6, 8, 10}

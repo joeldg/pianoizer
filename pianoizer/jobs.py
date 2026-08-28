@@ -160,7 +160,7 @@ class JobManager:
                 on_stage=_on_stage,
                 **pipeline_kwargs,
             )
-        except Exception as exc:  # noqa: BLE001  never crash the manager thread
+        except Exception as exc:
             with self._lock:
                 j = self._jobs.get(job_id)
                 if j is not None:

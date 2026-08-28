@@ -61,3 +61,10 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# Ignore rules that clash with deliberate patterns in this codebase:
+#   BLE001 / S110 / S112 - intentional broad-except fallbacks for optional-dep
+#     probing (transcribe/separate), font loading (drawing), and ffmpeg lookup
+#     (util); these paths must degrade gracefully, not log or re-raise.
+ignore = ["BLE001", "S110", "S112"]

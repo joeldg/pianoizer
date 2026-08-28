@@ -15,8 +15,8 @@ import hashlib
 import json
 import re
 import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from . import stages
 from .config import RenderConfig
@@ -63,7 +63,7 @@ def run_pipeline(
     keep_work: bool = False,
     separate: bool = False,
     midi_only: bool = False,
-    on_stage: "Callable[[str], None] | None" = None,
+    on_stage: Callable[[str], None] | None = None,
     progress: bool = False,
 ) -> str:
     """Run the full pipeline for ``source`` and write the video to ``out_path``.

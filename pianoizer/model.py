@@ -4,6 +4,7 @@ A `Note` is the canonical internal representation (see DESIGN.md 3.3).
 MIDI is loaded/saved only at the boundaries.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 

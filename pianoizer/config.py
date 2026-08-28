@@ -1,5 +1,6 @@
 """Configuration model and defaults (see DESIGN.md 7)."""
 from __future__ import annotations
+
 from pydantic import BaseModel
 
 

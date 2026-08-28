@@ -5,7 +5,7 @@ iterates nearby notes rather than the whole song.
 """
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from PIL import Image, ImageDraw
 
@@ -65,7 +65,6 @@ class Scene:
 
     # -- drawing -------------------------------------------------------------
     def draw_frame(self, index: NoteIndex, t: float) -> Image.Image:
-        cfg = self.cfg
         img = Image.new("RGB", (self.w, self.h), d.BG)
         draw = ImageDraw.Draw(img)
         draw.rectangle([0, 0, self.w, self.y_key], fill=d.FALL_AREA)
@@ -199,7 +198,7 @@ def title_card_frames(cfg: RenderConfig, title: str, subtitle: str = "",
 
     if subtitle:
         s_disp = _truncate_to_width(draw, subtitle, sub_font, max_text_w)
-        sw, sh = d.text_size(draw, s_disp, sub_font)
+        sw, _sh = d.text_size(draw, s_disp, sub_font)
         draw.text(((cfg.width - sw) / 2, cfg.height * 0.50),
                   s_disp, fill=d.TITLE_SUB, font=sub_font)
 
@@ -219,7 +218,7 @@ def title_card_frames(cfg: RenderConfig, title: str, subtitle: str = "",
                       fill=d.TITLE_SUB, font=foot_font)
             x += w + gap
 
-    fw, fh = d.text_size(draw, footer, foot_font)
+    fw, _fh = d.text_size(draw, footer, foot_font)
     draw.text(((cfg.width - fw) / 2, cfg.height * 0.88),
               footer, fill=d.TITLE_SUB, font=foot_font)
 

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -38,7 +37,8 @@ def _install_fakes(monkeypatch, work, calls):
     def fake_transcribe(audio_path, work_dir, **kw):
         calls.append("transcribe")
         # Write a real MIDI so load_midi works downstream.
-        from pianoizer.model import Note as N, save_midi as sm
+        from pianoizer.model import Note as N
+        from pianoizer.model import save_midi as sm
         out = Path(work_dir) / P.NOTES
         sm([N(0.0, 0.4, 60), N(0.5, 0.9, 64)], str(out))
         return str(out)
@@ -135,7 +135,8 @@ def test_postprocess_is_applied(tmp_path, monkeypatch):
 
     # Make transcribe emit a spurious ultra-short note that postprocess drops.
     def noisy_transcribe(audio_path, work_dir, **kw):
-        from pianoizer.model import Note as N, save_midi as sm
+        from pianoizer.model import Note as N
+        from pianoizer.model import save_midi as sm
         out = Path(work_dir) / P.NOTES
         sm([N(0.0, 0.4, 60), N(1.0, 1.005, 61)], str(out))  # 5ms blip
         return str(out)
@@ -156,7 +157,8 @@ def test_no_clean_keeps_raw(tmp_path, monkeypatch):
     _install_fakes(monkeypatch, work, calls)
 
     def noisy_transcribe(audio_path, work_dir, **kw):
-        from pianoizer.model import Note as N, save_midi as sm
+        from pianoizer.model import Note as N
+        from pianoizer.model import save_midi as sm
         out = Path(work_dir) / P.NOTES
         sm([N(0.0, 0.4, 60), N(1.0, 1.005, 61)], str(out))
         return str(out)

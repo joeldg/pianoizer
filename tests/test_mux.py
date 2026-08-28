@@ -38,7 +38,7 @@ def test_encode_solid_frames(tmp_path):
                 [probe, "-v", "error", "-select_streams", "v:0",
                  "-show_entries", "stream=width,height",
                  "-of", "csv=p=0", out],
-                capture_output=True, text=True,
+                capture_output=True, check=False, text=True,
             )
             if r.returncode == 0 and r.stdout.strip():
                 assert r.stdout.strip() == f"{W},{H}"

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pianoizer.stages.fetch import fetch, AUDIO_NAME, META_NAME
+from pianoizer.stages.fetch import AUDIO_NAME, META_NAME, fetch
 from pianoizer.util import ffmpeg_exe
 
 

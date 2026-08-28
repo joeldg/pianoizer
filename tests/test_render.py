@@ -40,10 +40,11 @@ def test_frame_changes_over_time():
 
 
 def test_title_card_truncates_long_title():
-    from pianoizer.stages.render import title_card_frames, _truncate_to_width
-    from pianoizer.config import RenderConfig
     from PIL import Image, ImageDraw
+
     import pianoizer.drawing as d
+    from pianoizer.config import RenderConfig
+    from pianoizer.stages.render import _truncate_to_width, title_card_frames
     cfg = RenderConfig(width=320, height=180, fps=10)
     frames = list(title_card_frames(cfg, "X" * 500, seconds=0.5))
     assert len(frames) == 5
@@ -58,8 +59,8 @@ def test_title_card_truncates_long_title():
 
 
 def test_title_card_fades_from_black():
-    from pianoizer.stages.render import title_card_frames
     from pianoizer.config import RenderConfig
+    from pianoizer.stages.render import title_card_frames
     cfg = RenderConfig(width=64, height=48, fps=10)
     frames = list(title_card_frames(cfg, "Hi", seconds=1.0))
     # first frame is closer to black than a mid frame
@@ -69,8 +70,8 @@ def test_title_card_fades_from_black():
 
 
 def test_title_card_hands_legend_runs():
-    from pianoizer.stages.render import title_card_frames
     from pianoizer.config import RenderConfig
+    from pianoizer.stages.render import title_card_frames
     cfg = RenderConfig(width=320, height=180, fps=10, hands=True)
     frames = list(title_card_frames(cfg, "Song", subtitle="C major | 120 BPM", seconds=0.5))
     assert len(frames) == 5

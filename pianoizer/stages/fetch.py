@@ -54,7 +54,7 @@ def _transcode_local(src: Path, out_path: Path) -> None:
         "-c:a", "pcm_s16le",
         str(out_path),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise RuntimeError(
             f"ffmpeg failed to transcode {src} (rc={proc.returncode}):\n"

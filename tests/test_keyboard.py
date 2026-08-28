@@ -1,4 +1,4 @@
-from pianoizer.keyboard import Keyboard, note_name, is_black_key
+from pianoizer.keyboard import Keyboard, is_black_key, note_name
 
 
 def test_middle_c():

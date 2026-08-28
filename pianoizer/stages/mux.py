@@ -7,7 +7,7 @@ duration is generated so the mp4 always has audio.
 from __future__ import annotations
 
 import subprocess
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 from PIL import Image
 
@@ -24,7 +24,7 @@ def encode(
     audio_path: str | None = None,
     crf: int = 20,
     preset: str = "medium",
-    on_frame: "Callable[[], None] | None" = None,
+    on_frame: Callable[[], None] | None = None,
 ) -> str:
     """Encode ``frames`` to an H.264 mp4 at ``out_path``. Returns ``out_path``.
 
