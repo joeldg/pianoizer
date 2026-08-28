@@ -35,7 +35,7 @@ See the milestones in DESIGN.md.
 
 ## Web UI
 
-    uv sync --extra web
+    uv sync --extra web              # (or --extra all)
     uv run pianoizer-web --host 127.0.0.1 --port 8000
     # open http://127.0.0.1:8000 : paste a URL, pick options, watch progress,
     # download the finished mp4. Also exposes a JSON API under /api/jobs.
@@ -51,6 +51,39 @@ See the milestones in DESIGN.md.
 - Python 3.11+ (managed via [uv](https://docs.astral.sh/uv/))
 - `ffmpeg` on PATH
 - `yt-dlp` (installed as a Python dependency)
+
+## Optional features (extras)
+
+Pianoizer keeps the base install lean. Extra features are separate optional
+dependency groups you enable with `uv sync --extra`:
+
+| Extra        | Enables                                   | Needed for                         |
+|--------------|-------------------------------------------|------------------------------------|
+| `web`        | FastAPI + uvicorn                         | `pianoizer-web` (browser UI + API) |
+| `transcribe` | basic-pitch + onnxruntime (audio -> MIDI) | processing audio/YouTube sources   |
+| `separate`   | demucs (stem isolation)                   | `--separate`                       |
+| `all`        | all of the above                          | everything                         |
+
+**Important — combine extras in one command.** A single
+`uv sync --extra X` makes the environment match *only* that extra, so running
+`uv sync --extra web` then `uv sync --extra transcribe` *uninstalls* `web`
+again (and vice versa). To use more than one feature, list them together or use
+`all`:
+
+    # everything at once (recommended if you want the full app):
+    uv sync --extra all
+
+    # or pick exactly what you need, in ONE command:
+    uv sync --extra web --extra transcribe
+
+Notes:
+
+- The base install (`uv sync`) renders existing MIDI and serves nothing extra.
+- `transcribe` pulls TensorFlow and pins `numpy<2`, so it is a large, slow first
+  install. You only need it when a job must transcribe audio; serving the web UI
+  on already-made MIDI does not.
+- The web UI shows the `transcribe`/`separate` "not installed" hint only when a
+  job actually reaches that stage.
 
 ## Quick start
 
@@ -73,7 +106,8 @@ See the milestones in DESIGN.md.
 system install is required for rendering.
 
     # M2 (available now): full pipeline from a YouTube URL or local file.
-    # Transcription needs the optional deps first:
+    # Transcription needs the optional deps first (see "Optional features"
+    # above -- combine extras in one command, e.g. --extra all):
     uv sync --extra transcribe
     uv run pianoizer "https://youtube.com/watch?v=..." --out song.mp4
     uv run pianoizer path/to/song.mp3 --out song.mp4

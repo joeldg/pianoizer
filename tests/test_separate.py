@@ -27,7 +27,15 @@ def _demucs_available() -> bool:
     return True
 
 
-HAVE_DEMUCS = _demucs_available()
+def _ffprobe_available() -> bool:
+    # demucs shells out to ffprobe for audio I/O; the project itself avoids a
+    # hard ffprobe dependency (it uses imageio-ffmpeg), so skip the real
+    # separation path when ffprobe is not on PATH.
+    import shutil
+    return shutil.which("ffprobe") is not None
+
+
+HAVE_DEMUCS = _demucs_available() and _ffprobe_available()
 
 
 def _write_tone_wav(path: Path, freq: float = 440.0, seconds: float = 2.0, sr: int = 44100) -> None:
@@ -64,6 +72,18 @@ def test_module_import_is_light():
 @pytest.mark.skipif(
     HAVE_DEMUCS,
     reason="demucs is installed; missing-dep path only testable when absent",
+)
+def _demucs_importable() -> bool:
+    try:
+        import demucs  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+@pytest.mark.skipif(
+    _demucs_importable(),
+    reason="demucs installed; missing-dep path only testable when it is absent",
 )
 def test_missing_dependency_raises_actionable_error(tmp_path):
     audio = tmp_path / "tone.wav"

@@ -1696,6 +1696,16 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "basic-pitch" },
+    { name = "demucs" },
+    { name = "fastapi" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "python-multipart" },
+    { name = "setuptools" },
+    { name = "uvicorn" },
+]
 separate = [
     { name = "demucs" },
 ]
@@ -1728,6 +1738,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "numpy", marker = "extra == 'transcribe'", specifier = "<2" },
     { name = "onnxruntime", marker = "extra == 'transcribe'", specifier = ">=1.16.0" },
+    { name = "pianoizer", extras = ["transcribe", "separate", "web"], marker = "extra == 'all'" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pretty-midi", specifier = ">=0.2.10" },
     { name = "pydantic", specifier = ">=2.0.0" },
@@ -1737,7 +1748,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.29" },
     { name = "yt-dlp", specifier = ">=2024.0.0" },
 ]
-provides-extras = ["transcribe", "separate", "web"]
+provides-extras = ["transcribe", "separate", "web", "all"]
 
 [package.metadata.requires-dev]
 dev = [

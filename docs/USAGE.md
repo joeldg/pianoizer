@@ -21,7 +21,14 @@ There are two entry points:
 uv sync                      # base deps: render path only
 uv sync --extra transcribe   # add audio -> MIDI transcription
 uv sync --extra separate     # add source separation (isolate the piano stem)
+uv sync --extra web          # add the web UI + HTTP API (pianoizer-web)
+uv sync --extra all          # all of the above at once
 ```
+
+**Combine extras in ONE command.** `uv sync --extra X` makes the environment
+match only that extra, so running two of them back to back uninstalls the first.
+List them together (`uv sync --extra web --extra transcribe`) or use
+`--extra all`.
 
 `ffmpeg` is provided automatically by the `imageio-ffmpeg` dependency, so no
 system install is required for rendering.

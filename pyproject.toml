@@ -40,6 +40,12 @@ web = [
     "uvicorn>=0.29",
     "python-multipart>=0.0.9",
 ]
+# Convenience: everything at once. `uv sync --extra all` installs web +
+# transcribe + separate together (a single `uv sync --extra X` resets the
+# extra set, so use this or list each --extra to combine them).
+all = [
+    "pianoizer[transcribe,separate,web]",
+]
 
 [project.scripts]
 pianoizer = "pianoizer.cli:main"
