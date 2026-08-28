@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Project working artifacts
+work/
+*.wav
+*.mp3
+*.mp4
+*.mkv
+*.webm
+frames/
+# keep test fixtures
+!tests/fixtures/*.mid
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
