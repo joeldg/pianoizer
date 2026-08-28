@@ -22,11 +22,18 @@ def encode(
     height: int,
     fps: int,
     audio_path: str | None = None,
+    audio_delay: float = 0.0,
     crf: int = 20,
     preset: str = "medium",
     on_frame: Callable[[], None] | None = None,
 ) -> str:
     """Encode ``frames`` to an H.264 mp4 at ``out_path``. Returns ``out_path``.
+
+    ``audio_delay`` shifts the real audio later by that many seconds so it
+    lines up with the animation when the video starts with a title card. The
+    animation clock starts at t=0 on the first animation frame, i.e. *after*
+    the title card, but the audio would otherwise start at video time 0 (during
+    the title card) and run ahead of the falling notes.
 
     Raises RuntimeError if ffmpeg exits non-zero.
     """
@@ -38,11 +45,17 @@ def encode(
         "-i", "pipe:0",
     ]
     if audio_path:
-        # Pad the real audio with trailing silence (apad -> effectively
-        # infinite), so the video length drives the output. Without this,
-        # -shortest would truncate the tutorial whenever the audio is shorter
-        # than the title card + fall + tail.
-        cmd += ["-i", audio_path, "-af", "apad", "-c:a", "aac"]
+        # Shift the audio later by the title-card duration so audio time 0 lines
+        # up with the first animation frame (adelay, in ms, per channel). Then
+        # pad with trailing silence (apad -> effectively infinite) so the video
+        # length drives the output; otherwise -shortest would truncate the
+        # tutorial whenever the audio is shorter than title card + fall + tail.
+        filters = []
+        if audio_delay > 0:
+            ms = round(audio_delay * 1000)
+            filters.append(f"adelay={ms}:all=1")
+        filters.append("apad")
+        cmd += ["-i", audio_path, "-af", ",".join(filters), "-c:a", "aac"]
     else:
         # Silent stereo track; also effectively infinite, bounded by video.
         cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-c:a", "aac"]

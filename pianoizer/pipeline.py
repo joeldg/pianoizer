@@ -160,8 +160,17 @@ def run_pipeline(
             if desc:
                 parts.append(desc)
         subtitle = "  |  ".join(parts)
+        # The title card precedes the animation, whose clock starts at t=0 on
+        # its first frame. Delay the audio by the title-card duration so it
+        # stays in sync with the falling notes (audio would otherwise start
+        # during the title card and run ahead). No card => no delay.
+        title_seconds = 3.0
+        audio_delay = title_seconds if title else 0.0
         _notify("render")
-        frames = stages.render.all_frames(notes, config, title=title, subtitle=subtitle)
+        frames = stages.render.all_frames(
+            notes, config, title=title, subtitle=subtitle,
+            title_seconds=title_seconds,
+        )
 
         on_frame = None
         bar = None
@@ -179,6 +188,7 @@ def run_pipeline(
                 frames, str(output_path),
                 width=config.width, height=config.height, fps=config.fps,
                 audio_path=str(audio_path) if audio_path.exists() else None,
+                audio_delay=audio_delay,
                 on_frame=on_frame,
             )
         finally:
