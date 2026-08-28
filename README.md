@@ -1,5 +1,8 @@
 # Pianoizer
 
+[![CI](https://github.com/joeldg/pianoizer/actions/workflows/ci.yml/badge.svg)](https://github.com/joeldg/pianoizer/actions/workflows/ci.yml)
+
+
 Turn a YouTube music video into a piano "falling notes" learning video
 (synthesia / Yellow Notes style): a labeled keyboard at the bottom and colored
 note blocks that fall and land on the correct keys in time with the audio.
