@@ -17,6 +17,10 @@ const clearBtn = document.getElementById("clear-finished");
 const jobs = new Map();
 // Ids removed client-side via "Clear finished"; never re-rendered.
 const hidden = new Set();
+// Signature of the last DOM we built per job id ("<status>|<stage>|<pct>").
+// A done/error row keeps a stable signature, so we stop rebuilding it and the
+// inline <video> element survives across polls (rebuilding it stops playback).
+const renderedSig = new Map();
 // A pre-uploaded source path (from drag-drop), if any.
 let uploadedSource = null;
 
@@ -131,8 +135,25 @@ function updateEmptyState() {
   emptyEl.style.display = visible === 0 ? "block" : "none";
 }
 
+function jobSignature(job) {
+  // Terminal jobs never change again, so their signature is status-only; that
+  // keeps their row (and any playing <video>) untouched on later polls.
+  if (job.status === "done" || job.status === "error" ||
+      job.status === "failed") {
+    return job.status;
+  }
+  return (job.status || "queued") + "|" + (job.stage || "") + "|" +
+    displayPct(job);
+}
+
 function renderJob(job) {
   if (hidden.has(job.id)) return;
+  const sig = jobSignature(job);
+  const existing = document.getElementById("job-" + job.id);
+  if (existing && renderedSig.get(job.id) === sig) {
+    return; // Nothing changed for this row; leave its DOM (and video) alone.
+  }
+  renderedSig.set(job.id, sig);
   let li = document.getElementById("job-" + job.id);
   if (!li) {
     li = document.createElement("li");
@@ -386,6 +407,7 @@ form.addEventListener("submit", async (ev) => {
     const job = await res.json();
     jobs.set(job.id, job);
     renderJob(job);
+    ensurePolling();
     form.reset();
     document.getElementById("fps").value = 30;
     uploadedSource = null;
@@ -399,5 +421,34 @@ form.addEventListener("submit", async (ev) => {
 });
 
 updateEmptyState();
-refresh();
-setInterval(refresh, POLL_MS);
+let pollTimer = null;
+
+function anyActive() {
+  for (const job of jobs.values()) {
+    if (!hidden.has(job.id) && isActive(job)) return true;
+  }
+  return false;
+}
+
+async function poll() {
+  await refresh();
+  // Keep polling only while something is still queued/running. Once every job
+  // is done/error there is nothing to update, so we stop hitting /api/jobs
+  // (which also avoids any needless DOM work near a playing <video>).
+  if (anyActive()) {
+    pollTimer = setTimeout(poll, POLL_MS);
+  } else {
+    pollTimer = null;
+  }
+}
+
+function ensurePolling() {
+  if (pollTimer === null) {
+    pollTimer = setTimeout(poll, POLL_MS);
+  }
+}
+
+// Initial load: fetch once, then poll only if there is active work.
+refresh().then(() => {
+  if (anyActive()) ensurePolling();
+});
