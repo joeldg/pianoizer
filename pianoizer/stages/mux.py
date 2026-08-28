@@ -37,11 +37,16 @@ def encode(
         "-i", "pipe:0",
     ]
     if audio_path:
-        cmd += ["-i", audio_path, "-c:a", "aac", "-shortest"]
+        # Pad the real audio with trailing silence (apad -> effectively
+        # infinite), so the video length drives the output. Without this,
+        # -shortest would truncate the tutorial whenever the audio is shorter
+        # than the title card + fall + tail.
+        cmd += ["-i", audio_path, "-af", "apad", "-c:a", "aac"]
     else:
-        # Silent stereo track; ends with video via -shortest.
-        cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-                "-c:a", "aac", "-shortest"]
+        # Silent stereo track; also effectively infinite, bounded by video.
+        cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-c:a", "aac"]
+    # The video stream is now the shortest; -shortest bounds output to it.
+    cmd += ["-shortest"]
     cmd += [
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-preset", preset, "-crf", str(crf),
@@ -55,8 +60,16 @@ def encode(
             if img.mode != "RGB":
                 img = img.convert("RGB")
             proc.stdin.write(img.tobytes())
+    except BrokenPipeError:
+        # ffmpeg can legitimately close stdin early (e.g. with ``-shortest``
+        # when the audio track is shorter than the video). This is not an
+        # error; the return code below is the source of truth.
+        pass
     finally:
-        proc.stdin.close()
+        try:
+            proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
     err = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
     rc = proc.wait()
     if rc != 0:

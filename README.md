@@ -13,9 +13,10 @@ See **[DESIGN.md](DESIGN.md)** for the full design.
 
 ## Status
 
-M1 complete: `pianoizer render notes.mid --out out.mp4` produces a
-falling-notes MP4 with a labeled keyboard and title card. Next: YouTube fetch +
-audio-to-MIDI transcription (M2). See the milestones in DESIGN.md.
+M2 complete: full pipeline from a YouTube URL (or local audio/video file) to a
+falling-notes MP4 — download, transcribe to MIDI, render, and mux.
+Transcription is approximate (see limitations below). Next: quality work —
+source separation and MIDI cleanup (M3). See the milestones in DESIGN.md.
 
 ## Requirements
 
@@ -43,8 +44,26 @@ audio-to-MIDI transcription (M2). See the milestones in DESIGN.md.
 `ffmpeg` is provided automatically via the `imageio-ffmpeg` dependency, so no
 system install is required for rendering.
 
-    # full pipeline from YouTube (later milestone):
+    # M2 (available now): full pipeline from a YouTube URL or local file.
+    # Transcription needs the optional deps first:
+    uv sync --extra transcribe
     uv run pianoizer "https://youtube.com/watch?v=..." --out song.mp4
+    uv run pianoizer path/to/song.mp3 --out song.mp4
+
+    # pipeline flags:
+    #   --separate            isolate the melody/piano stem first (M3; no-op now)
+    #   --from-stage STAGE    resume from {fetch,transcribe,postprocess,render,mux}
+    #   --keep-work           keep the intermediate working directory
+    #   --work-dir DIR        set the per-job working directory
+    #   --midi-only           stop after producing cleaned.mid (no video)
+    # (plus the render flags above: --keys/--fps/--lead-time/--title/...)
+
+## Transcription quality
+
+Automatic audio-to-MIDI (via Spotify `basic-pitch`) is imperfect, especially
+on full-band or busy songs. Output is meant for **learning**, not a note-perfect
+score. Piano-forward or solo-piano input works best. You can also render your
+own hand-corrected MIDI with `pianoizer render`.
 
 ## Legal / ethical note
 
