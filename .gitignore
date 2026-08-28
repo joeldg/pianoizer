@@ -17,6 +17,10 @@ work/
 frames/
 # keep test fixtures
 !tests/fixtures/*.mid
+# keep the hand-authored public-domain sample MIDI (see scripts/make_sample.py)
+!examples/*.mid
+# examples/*.mp4 stays ignored (covered by *.mp4 above); regenerate with
+#   uv run python scripts/make_sample.py
 
 # OS / editor
 .DS_Store

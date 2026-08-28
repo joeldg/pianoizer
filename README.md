@@ -6,6 +6,11 @@ note blocks that fall and land on the correct keys in time with the audio.
 
 See **[DESIGN.md](DESIGN.md)** for the full design.
 
+For hands-on docs see **[docs/USAGE.md](docs/USAGE.md)** (end-to-end usage
+and every flag) and **[docs/PIPELINE.md](docs/PIPELINE.md)** (stages,
+`work/<job_id>/` artifacts, and `--from-stage` resume/caching). Generate a
+small offline sample with `uv run python scripts/make_sample.py`.
+
 ## Pipeline
 
     YouTube URL -> download audio -> (optional) isolate piano -> transcribe to MIDI
