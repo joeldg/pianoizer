@@ -26,6 +26,33 @@ def is_black_key(pitch: int) -> bool:
     return (pitch % 12) in BLACK_PITCH_CLASSES
 
 
+def fit_range(
+    pitches, *, keys: int = 88, pad_semitones: int = 2, snap_to_c: bool = True
+) -> tuple[int, int]:
+    """Compute a trimmed ``(low, high)`` MIDI range covering ``pitches``.
+
+    Used by --fit-keys to drop unused edge keys so the used keys render wider.
+    The used min/max pitch is padded by ``pad_semitones`` on each side, then
+    (when ``snap_to_c``) widened outward to the nearest C so the keyboard
+    starts/ends on an octave boundary. The result is clamped to the standard
+    range for ``keys`` and never inverts. Empty input falls back to the preset.
+    """
+    lo_lim, hi_lim = KEY_RANGES.get(keys, (21, 108))
+    ps = [int(p) for p in pitches]
+    if not ps:
+        return (lo_lim, hi_lim)
+    lo = min(ps) - pad_semitones
+    hi = max(ps) + pad_semitones
+    if snap_to_c:
+        lo -= lo % 12          # down to the C at or below
+        hi += (12 - hi % 12) % 12  # up to the C at or above
+    lo = max(lo_lim, lo)
+    hi = min(hi_lim, hi)
+    if hi < lo:
+        lo, hi = lo_lim, hi_lim
+    return (lo, hi)
+
+
 def note_name(pitch: int, octave: bool = False, black: bool = True) -> str:
     """Return the label for a MIDI pitch, e.g. 60 -> 'C' or 'C4'."""
     name = NOTE_NAMES[pitch % 12]
@@ -63,8 +90,15 @@ class Keyboard:
         octave_labels: bool = False,
         label_black: bool = True,
         black_width_ratio: float = BLACK_WIDTH_RATIO,
+        low: int | None = None,
+        high: int | None = None,
     ) -> None:
-        if keys not in KEY_RANGES:
+        # An explicit ``low``/``high`` MIDI range overrides the standard
+        # ``keys`` preset (used by --fit-keys to trim unused edge keys so the
+        # remaining keys render wider). When only one bound is given the other
+        # falls back to the preset bound. The range is always widened to whole
+        # white keys at both ends so the layout stays tidy.
+        if low is None and high is None and keys not in KEY_RANGES:
             raise ValueError(
                 f"unsupported key count {keys!r}; choose one of {sorted(KEY_RANGES)}"
             )
@@ -72,7 +106,17 @@ class Keyboard:
             raise ValueError("width must be positive")
         self.width = float(width)
         self.keys = keys
-        self.low, self.high = KEY_RANGES[keys]
+        preset_low, preset_high = KEY_RANGES.get(keys, (21, 108))
+        lo = preset_low if low is None else int(low)
+        hi = preset_high if high is None else int(high)
+        if hi < lo:
+            lo, hi = hi, lo
+        # Snap outward to white keys so both edges are full naturals.
+        while is_black_key(lo):
+            lo -= 1
+        while is_black_key(hi):
+            hi += 1
+        self.low, self.high = lo, hi
         self.octave_labels = octave_labels
         self.label_black = label_black
         self.black_width_ratio = black_width_ratio

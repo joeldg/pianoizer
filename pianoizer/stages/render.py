@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 from .. import drawing as d
 from ..config import RenderConfig
 from ..geometry import hand_lane_rect, is_visible, note_block, pixels_per_second
-from ..keyboard import Keyboard
+from ..keyboard import Keyboard, fit_range
 from ..model import Note
 
 _BUCKET_SECONDS = 1.0
@@ -68,7 +68,7 @@ class NoteIndex:
 class Scene:
     """Holds precomputed layout for a render (keyboard + fall geometry)."""
 
-    def __init__(self, cfg: RenderConfig) -> None:
+    def __init__(self, cfg: RenderConfig, notes: list[Note] | None = None) -> None:
         self.cfg = cfg
         self.w = cfg.width
         self.h = cfg.height
@@ -76,11 +76,22 @@ class Scene:
         self.key_h = int(self.h * 0.20)
         self.y_key = self.h - self.key_h  # top edge of keyboard = bottom of fall
         self.y_top = 0
+        # --fit-keys: trim unused edge keys to the song's pitch range so the
+        # remaining keys (and their letters) render wider. Requires notes.
+        low = high = None
+        if getattr(cfg, "fit_keys", False) and notes:
+            low, high = fit_range(
+                (n.pitch for n in notes),
+                keys=cfg.keys,
+                pad_semitones=getattr(cfg, "fit_pad", 2),
+            )
         self.kb = Keyboard(
             self.w,
             keys=cfg.keys,
             octave_labels=cfg.octave_numbers,
             label_black=cfg.label_black,
+            low=low,
+            high=high,
         )
         self.pps = pixels_per_second(self.y_key, self.y_top, cfg.lead_time)
         self._finger_map = None  # lazy: id(note) -> finger (issue #30)
@@ -278,7 +289,8 @@ class Scene:
     def _draw_keyboard(self, draw, active_pitches: set[int]) -> None:
         y0 = self.y_key
         y1 = self.h
-        label_font = d.load_font(max(9, int(self.kb.white_width * 0.42)), bold=True)
+        ls = float(getattr(self.cfg, "label_scale", 1.0) or 1.0)
+        label_font = d.load_font(max(9, int(self.kb.white_width * 0.42 * ls)), bold=True)
 
         # White keys.
         for key in self.kb:
@@ -301,7 +313,7 @@ class Scene:
             fill = d.BLACK_KEY_ACTIVE if key.pitch in active_pitches else d.BLACK_KEY
             draw.rectangle([key.x, y0, key.x + key.width, y0 + bk_h], fill=fill)
             if key.label:
-                bf = d.load_font(max(7, int(self.kb.white_width * 0.30)), bold=True)
+                bf = d.load_font(max(7, int(self.kb.white_width * 0.30 * ls)), bold=True)
                 tw, th = d.text_size(draw, key.label, bf)
                 cx = key.x + key.width / 2 - tw / 2
                 cy = y0 + bk_h - th - 3
@@ -314,7 +326,7 @@ def song_duration(notes: list[Note]) -> float:
 
 def frames(notes: list[Note], cfg: RenderConfig, tail: float = 1.5) -> Iterator[Image.Image]:
     """Yield one PIL frame per fps tick covering the whole song plus a tail."""
-    scene = Scene(cfg)
+    scene = Scene(cfg, notes)
     index = NoteIndex(notes, cfg.lead_time)
     total = song_duration(notes) + tail
     n_frames = int(total * cfg.fps) + 1
@@ -325,7 +337,7 @@ def frames(notes: list[Note], cfg: RenderConfig, tail: float = 1.5) -> Iterator[
 
 def render_frame(notes: list[Note], t: float, cfg: RenderConfig) -> Image.Image:
     """Render a single frame at time ``t`` (convenience for tests)."""
-    scene = Scene(cfg)
+    scene = Scene(cfg, notes)
     index = NoteIndex(notes, cfg.lead_time)
     return scene.draw_frame(index, t)
 

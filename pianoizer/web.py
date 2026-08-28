@@ -95,6 +95,12 @@ def _config_from_options(options: dict[str, Any]) -> RenderConfig:
         fields["particle_intensity"] = max(0.0, min(1.0, float(options["particle_intensity"])))
     if options.get("hand_split") is not None:
         fields["hand_split"] = bool(options["hand_split"])
+    if options.get("fit_keys") is not None:
+        fields["fit_keys"] = bool(options["fit_keys"])
+    if options.get("fit_pad") is not None:
+        fields["fit_pad"] = max(0, min(12, int(options["fit_pad"])))
+    if options.get("label_scale") is not None:
+        fields["label_scale"] = max(0.5, min(3.0, float(options["label_scale"])))
     if options.get("hw_encode") is not None:
         fields["hw_encode"] = bool(options["hw_encode"])
     if options.get("encode_bitrate"):

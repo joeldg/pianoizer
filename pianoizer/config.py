@@ -34,6 +34,10 @@ class RenderConfig(BaseModel):
     particles: bool = False            # particle burst when a note lands
     particle_intensity: float = 0.6    # peak particle alpha/count in [0,1]
     hand_split: bool = False           # split falling notes into L/R lanes
+    # Keyboard sizing / readability.
+    fit_keys: bool = False             # trim unused edge keys so keys/labels grow
+    fit_pad: int = 2                   # semitones of margin each side when fitting
+    label_scale: float = 1.0           # multiplier on key note-letter font size
     # Encode performance (Apple silicon / general HW accel). Default OFF keeps
     # the software libx264 path so golden renders stay byte-reproducible.
     hw_encode: bool = False            # use h264_videotoolbox HW encoder

@@ -452,6 +452,10 @@ form.addEventListener("submit", async (ev) => {
       particles: $("particles").checked,
       particle_intensity: parseFloat($("particle_intensity").value),
       hand_split: $("hand_split").checked,
+      // Keyboard sizing / readability.
+      fit_keys: $("fit_keys").checked,
+      fit_pad: parseInt($("fit_pad").value, 10),
+      label_scale: parseFloat($("label_scale").value),
       // Performance (Apple silicon HW encode).
       hw_encode: $("hw_encode").checked,
       encode_bitrate: $("encode_bitrate").value.trim() || null,
@@ -492,8 +496,11 @@ function syncRangeOutputs() {
   const pi = document.getElementById("particle_intensity");
   const po = document.getElementById("particle_out");
   if (pi && po) po.textContent = (parseFloat(pi.value) || 0).toFixed(2);
+  const lsr = document.getElementById("label_scale");
+  const lso = document.getElementById("label_scale_out");
+  if (lsr && lso) lso.textContent = (parseFloat(lsr.value) || 1).toFixed(1);
 }
-["snap_timing", "glow_intensity", "particle_intensity"].forEach((id) => {
+["snap_timing", "glow_intensity", "particle_intensity", "label_scale"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("input", syncRangeOutputs);
 });
