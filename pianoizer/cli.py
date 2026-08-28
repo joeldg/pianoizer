@@ -33,6 +33,14 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         hands=getattr(args, "hands", False),
         show_key_tempo=getattr(args, "key_tempo", False),
         clean=getattr(args, "clean", True),
+        transcribe_preset=getattr(args, "transcribe_preset", "default"),
+        snap_timing=getattr(args, "snap_timing", 0.0),
+        snap_subdivision=getattr(args, "snap_subdivision", 4),
+        theme=getattr(args, "theme", "classic"),
+        glow=getattr(args, "glow", False),
+        glow_intensity=getattr(args, "glow_intensity", 0.6),
+        trail=getattr(args, "trail", False),
+        trail_length=getattr(args, "trail_length", 0.0),
     )
 
 
@@ -53,6 +61,23 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-clean", dest="clean", action="store_false",
                         help="Skip MIDI post-processing (keep raw transcription)")
     parser.set_defaults(clean=True)
+    from .stages.transcribe import PRESETS
+    parser.add_argument("--transcribe-preset", choices=sorted(PRESETS),
+                        default="default",
+                        help="basic-pitch threshold preset (solo-piano, dense-pop, "
+                             "band, vocal-lead, default)")
+    parser.add_argument("--snap-timing", type=float, default=0.0,
+                        help="Beat-snap strength [0,1]; 0 disables (default 0)")
+    parser.add_argument("--snap-subdivision", type=int, default=4,
+                        help="Beat-snap grid cells per beat (default 4 = 16th notes)")
+    parser.add_argument("--theme", type=str, default="classic",
+                        help="Color theme (classic, dark, light, neon, synthesia)")
+    parser.add_argument("--glow", action="store_true", help="Soft halo behind notes")
+    parser.add_argument("--glow-intensity", type=float, default=0.6,
+                        help="Glow peak alpha [0,1] (default 0.6)")
+    parser.add_argument("--trail", action="store_true", help="Fading tail behind notes")
+    parser.add_argument("--trail-length", type=float, default=0.0,
+                        help="Trail length in seconds (default 0)")
 
 
 # --------------------------------------------------------------------------

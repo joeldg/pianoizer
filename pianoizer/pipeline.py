@@ -64,6 +64,7 @@ def run_pipeline(
     separate: bool = False,
     midi_only: bool = False,
     on_stage: Callable[[str], None] | None = None,
+    on_progress: Callable[[float], None] | None = None,
     progress: bool = False,
 ) -> str:
     """Run the full pipeline for ``source`` and write the video to ``out_path``.
@@ -108,21 +109,42 @@ def run_pipeline(
     elif meta_path.exists():
         meta = json.loads(meta_path.read_text())
 
-    # --- Stage 2: separate (optional; M3) --------------------------------
-    stem_path = work / STEM
-    if separate and _should_run("separate", stem_path, from_stage):
-        _notify("separate")
-        produced = stages.separate.separate(str(audio_path), str(work))
-        if Path(produced) != stem_path:
-            shutil.copyfile(produced, stem_path)
-    transcribe_input = stem_path if (separate and stem_path.exists()) else audio_path
-
-    # --- Stage 3: transcribe --------------------------------------------
-    if _should_run("transcribe", notes_path, from_stage):
-        _notify("transcribe")
-        produced = stages.transcribe.transcribe(str(transcribe_input), str(work))
-        if Path(produced) != notes_path:
-            shutil.copyfile(produced, notes_path)
+    # --- Stage 2+3: separate (optional) then transcribe -----------------
+    # When separation is on we split into stems, transcribe EACH stem, and
+    # merge the MIDIs -- this is much cleaner than transcribing a dense mix.
+    # Otherwise we transcribe the full mix. Both paths produce notes_path, so
+    # caching/resume keys on notes.mid as before.
+    preset = getattr(config, "transcribe_preset", "default")
+    if separate:
+        stem_dir = work / "stems"
+        if _should_run("separate", notes_path, from_stage):
+            _notify("separate")
+            stem_dir.mkdir(parents=True, exist_ok=True)
+            stages.separate.separate_all(str(audio_path), str(stem_dir))
+        if _should_run("transcribe", notes_path, from_stage):
+            _notify("transcribe")
+            # Re-derive stem list from disk so resume works without re-separating.
+            stem_wavs = {
+                p.stem.removeprefix("stem_"): str(p)
+                for p in sorted(stem_dir.glob("stem_*.wav"))
+            }
+            stem_midis: list[str] = []
+            for name, wav in stem_wavs.items():
+                sub = stem_dir / name
+                sub.mkdir(parents=True, exist_ok=True)
+                stem_midis.append(
+                    stages.transcribe.transcribe(wav, str(sub), preset=preset)
+                )
+            merged = stages.separate.merge_midi(stem_midis)
+            save_midi(merged, str(notes_path))
+    else:
+        if _should_run("transcribe", notes_path, from_stage):
+            _notify("transcribe")
+            produced = stages.transcribe.transcribe(
+                str(audio_path), str(work), preset=preset,
+            )
+            if Path(produced) != notes_path:
+                shutil.copyfile(produced, notes_path)
 
     # --- Stage 4: postprocess (M3: clean MIDI) ---------------------------
     # Hand assignment is applied at render time (MIDI cannot store it), so the
@@ -144,10 +166,21 @@ def run_pipeline(
     if (_should_run("render", output_path, from_stage)
             or _should_run("mux", output_path, from_stage)):
         notes = load_midi(str(cleaned_path))
+        if getattr(config, "snap_timing", 0.0) > 0.0:
+            # Beat-snap is a render-time choice; keep cleaned.mid a plain artifact.
+            from .timing import snap_to_grid
+            notes = snap_to_grid(
+                notes,
+                strength=config.snap_timing,
+                subdivision=getattr(config, "snap_subdivision", 4),
+            )
         if config.hands:
             # MIDI does not store hand; re-derive on load so cached resume works.
             from .hands import assign_hands
             notes = assign_hands(notes)
+        # Activate the color theme before any drawing (default classic = no change).
+        from . import drawing as _d
+        _d.set_active_theme(getattr(config, "theme", "classic"))
         title = config.title or meta.get("title") or Path(source).stem
         parts: list[str] = []
         if meta.get("uploader"):
@@ -172,16 +205,30 @@ def run_pipeline(
             title_seconds=title_seconds,
         )
 
-        on_frame = None
         bar = None
-        if progress:
-            from .progress import Progress
+        fine = None
+        if progress or on_progress is not None:
             from .stages.render import song_duration
             total = int(
                 (config.lead_time + song_duration(notes) + 3.0 + 3.0) * config.fps
             )
-            bar = Progress(total=total, label="encoding", enabled=True)
-            on_frame = bar.update
+            if progress:
+                from .progress import Progress
+                bar = Progress(total=total, label="encoding", enabled=True)
+            if on_progress is not None:
+                from .progress import frame_progress_callback
+                fine = frame_progress_callback(
+                    total, stage_base=0.6, stage_span=0.4,
+                    set_progress=on_progress,
+                )
+
+        def _on_frame() -> None:
+            if bar is not None:
+                bar.update()
+            if fine is not None:
+                fine()
+
+        on_frame = _on_frame if (bar is not None or fine is not None) else None
         _notify("mux")
         try:
             stages.mux.encode(

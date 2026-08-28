@@ -150,6 +150,12 @@ class JobManager:
                     j.stage = stage
                     j.progress = _stage_progress(stage)
 
+        def _set_progress(value: float) -> None:
+            with self._lock:
+                j = self._jobs.get(job_id)
+                if j is not None:
+                    j.progress = value
+
         work_dir = f"{self.work_root}/{job_id}"
         try:
             result = run_pipeline(
@@ -158,6 +164,7 @@ class JobManager:
                 config,
                 work_dir=work_dir,
                 on_stage=_on_stage,
+                on_progress=_set_progress,
                 **pipeline_kwargs,
             )
         except Exception as exc:

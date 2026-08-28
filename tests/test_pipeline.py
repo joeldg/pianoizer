@@ -195,12 +195,15 @@ def test_separate_stage_invoked(tmp_path, monkeypatch):
     calls = []
     _install_fakes(monkeypatch, work, calls)
 
-    def fake_separate(audio_path, work_dir, stem="other"):
+    def fake_separate_all(audio_path, work_dir, stems=("other", "vocals", "bass")):
         calls.append("separate")
-        p = Path(work_dir) / P.STEM
-        p.write_bytes(b"RIFFstem")
-        return str(p)
-    monkeypatch.setattr(stages.separate, "separate", fake_separate)
+        out = {}
+        for name in stems:
+            p = Path(work_dir) / f"stem_{name}.wav"
+            p.write_bytes(b"RIFFstem")
+            out[name] = str(p)
+        return out
+    monkeypatch.setattr(stages.separate, "separate_all", fake_separate_all)
 
     cfg = RenderConfig(width=64, height=48, fps=10)
     out = tmp_path / "out.mp4"
