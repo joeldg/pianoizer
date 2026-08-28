@@ -78,6 +78,8 @@ class Scene:
         glow_intensity = float(getattr(self.cfg, "glow_intensity", 0.6))
         trail_on = bool(getattr(self.cfg, "trail", False))
         trail_seconds = float(getattr(self.cfg, "trail_length", 0.0))
+        flash_on = bool(getattr(self.cfg, "keypress_flash", False))
+        ripple_on = bool(getattr(self.cfg, "flash_ripple", False))
         # Blur scales with note width so glow looks consistent across key sizes.
         glow_blur = max(3, round(self.kb.white_width * 0.45))
         trail_px = round(trail_seconds * self.pps)
@@ -123,7 +125,40 @@ class Scene:
                 )
 
         self._draw_keyboard(draw, active_pitches)
+
+        # M6: keypress flash + optional ripple for keys that just landed.
+        if flash_on or ripple_on:
+            self._draw_keypress_flashes(img, active, t, flash_on, ripple_on)
         return img
+
+    def _key_region(self, pitch: int) -> tuple[float, float, float, float]:
+        """Return the on-keyboard rectangle for ``pitch`` (black keys shorter)."""
+        x, kw, is_black = self.kb.key_rect(pitch)
+        if is_black:
+            bk_h = int(self.key_h * 0.62)
+            return (x, self.y_key, x + kw, self.y_key + bk_h)
+        return (x, self.y_key, x + kw, self.h)
+
+    def _draw_keypress_flashes(self, img, active, t, flash_on, ripple_on) -> None:
+        """Illuminate keys whose notes landed within the flash/ripple window."""
+        for n in active:
+            age = t - n.start
+            if age < -1e-6 or n.end < t:
+                continue  # not yet landed, or already released
+            # Note/hand color for the flash tint.
+            is_black = self.kb.key(n.pitch).is_black
+            if n.hand == "L":
+                color = d.LEFT_NOTE
+            elif n.hand == "R":
+                color = d.RIGHT_NOTE
+            else:
+                color = d.BLACK_NOTE if is_black else d.WHITE_NOTE
+            rect = self._key_region(n.pitch)
+            if flash_on and age <= _FLASH_ONSET + _FLASH_DECAY:
+                strength = 1.0 - max(0.0, age - _FLASH_ONSET) / _FLASH_DECAY
+                _flash_key_overlay(img, rect, color, strength)
+            if ripple_on and age <= _RIPPLE_DECAY:
+                _flash_ripple(img, rect, color, age / _RIPPLE_DECAY)
 
     def _draw_keyboard(self, draw, active_pitches: set[int]) -> None:
         y0 = self.y_key
@@ -267,3 +302,91 @@ def all_frames(notes: list[Note], cfg: RenderConfig, *, title: str | None = None
     if title:
         yield from title_card_frames(cfg, title, subtitle, title_seconds)
     yield from frames(notes, cfg, tail=tail)
+
+
+# ---------------------------------------------------------------------------
+# M6 render polish: keypress flash + ripple (issue #28).
+#
+# When a note lands on the keyboard, briefly illuminate that key with a bright
+# overlay that decays over a short window, optionally with a couple of expanding
+# fading ripple outlines above the key. Implemented locally (drawing.py is
+# parent-owned) using Pillow RGBA compositing. Default OFF; the plain path is
+# byte-for-byte unchanged.
+# ---------------------------------------------------------------------------
+_FLASH_ONSET = 0.08     # seconds after start still counted as "just landed"
+_FLASH_DECAY = 0.15     # seconds over which the flash fades to nothing
+_RIPPLE_DECAY = 0.22    # seconds over which ripple outlines expand and fade
+
+
+def _flash_key_overlay(img, rect, color, strength: float) -> None:
+    """Composite a bright, fading overlay onto a key rectangle.
+
+    Args:
+        img: target RGB ``Image``.
+        rect: ``(x0, y0, x1, y1)`` of the key region to illuminate.
+        color: RGB tuple (note/hand color) for the flash tint.
+        strength: flash amount in ``[0, 1]`` (1 at onset, 0 fully decayed).
+    """
+    strength = max(0.0, min(1.0, float(strength)))
+    if strength <= 0.0:
+        return
+    x0, y0, x1, y1 = (round(v) for v in rect)
+    w, h = x1 - x0, y1 - y0
+    if w < 1 or h < 1:
+        return
+    # Blend toward a light tint of the note color so the key visibly brightens.
+    tint = (
+        min(255, (color[0] + 255) // 2),
+        min(255, (color[1] + 255) // 2),
+        min(255, (color[2] + 255) // 2),
+    )
+    a = round(255 * strength)
+    layer = Image.new("RGBA", (img.width, img.height), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rectangle([x0, y0, x1, y1], fill=(tint[0], tint[1], tint[2], a))
+    region = img.convert("RGBA")
+    region.alpha_composite(layer)
+    img.paste(region.convert("RGB"), (0, 0))
+
+
+def _flash_ripple(img, rect, color, progress: float) -> None:
+    """Draw a couple of expanding, fading outline ripples above a key.
+
+    Args:
+        img: target RGB ``Image``.
+        rect: ``(x0, y0, x1, y1)`` of the key region the ripple rises from.
+        color: RGB tuple for the ripple outlines.
+        progress: ripple life in ``[0, 1]`` (0 at onset, 1 fully faded).
+    """
+    progress = max(0.0, min(1.0, float(progress)))
+    if progress >= 1.0:
+        return
+    x0, y0, x1, _y1 = (round(v) for v in rect)
+    w = x1 - x0
+    if w < 2:
+        return
+    cx = (x0 + x1) / 2
+    layer = Image.new("RGBA", (img.width, img.height), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    # Two staggered rings so the ripple reads as motion, kept cheap.
+    for phase in (0.0, 0.5):
+        p = progress + phase
+        if p >= 1.0 or p < 0.0:
+            continue
+        spread = w * (0.6 + 1.4 * p)          # ring half-width grows with life
+        rise = (w * 0.9) * p                  # ring floats above the key
+        a = round(200 * (1.0 - p))
+        if a <= 0:
+            continue
+        ex0 = cx - spread / 2
+        ex1 = cx + spread / 2
+        ey = y0 - 1 - rise
+        eh = max(2.0, w * 0.35 * (1.0 - p))
+        ld.ellipse(
+            [ex0, ey - eh, ex1, ey + eh],
+            outline=(color[0], color[1], color[2], a),
+            width=2,
+        )
+    region = img.convert("RGBA")
+    region.alpha_composite(layer)
+    img.paste(region.convert("RGB"), (0, 0))

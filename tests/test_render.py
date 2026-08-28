@@ -121,3 +121,76 @@ def test_trail_enabled_adds_colored_pixels():
     n_plain = _count_colored_pixels(img_plain, d.FALL_AREA)
     n_trail = _count_colored_pixels(img_trail, d.FALL_AREA)
     assert n_trail > n_plain
+
+
+def _key_region_mean_brightness(img, scene, pitch):
+    """Mean L-channel brightness over a pitch's on-keyboard rectangle."""
+    x0, y0, x1, y1 = (round(v) for v in scene._key_region(pitch))
+    x0 = max(0, x0)
+    y0 = max(0, y0)
+    x1 = min(img.width, x1)
+    y1 = min(img.height, y1)
+    region = img.convert("L").crop((x0, y0, x1, y1))
+    data = region.tobytes()
+    return sum(data) / max(1, len(data))
+
+
+def _flash_notes():
+    # Single sustained C4 landing at t=1.0 so we can probe onset vs. decay.
+    return [Note(start=1.0, end=2.0, pitch=60)]
+
+
+def test_keypress_flash_disabled_matches_plain_path():
+    from pianoizer.stages.render import render_frame
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    off = plain.model_copy(update={"keypress_flash": False, "flash_ripple": False})
+    a = render_frame(_flash_notes(), t=1.02, cfg=plain).tobytes()
+    b = render_frame(_flash_notes(), t=1.02, cfg=off).tobytes()
+    assert a == b
+
+
+def test_keypress_flash_brightens_key_at_onset():
+    from pianoizer.stages.render import Scene, render_frame
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    flash = plain.model_copy(update={"keypress_flash": True})
+    scene = Scene(plain)
+    # Just after onset, the flash is near peak.
+    t = 1.02
+    img_plain = render_frame(_flash_notes(), t=t, cfg=plain)
+    img_flash = render_frame(_flash_notes(), t=t, cfg=flash)
+    b_plain = _key_region_mean_brightness(img_plain, scene, 60)
+    b_flash = _key_region_mean_brightness(img_flash, scene, 60)
+    assert b_flash > b_plain
+    assert img_flash.size == img_plain.size
+
+
+def test_keypress_flash_decays_over_time():
+    from pianoizer.stages.render import Scene, render_frame
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    flash = plain.model_copy(update={"keypress_flash": True})
+    scene = Scene(plain)
+    onset = _key_region_mean_brightness(
+        render_frame(_flash_notes(), t=1.02, cfg=flash), scene, 60
+    )
+    later = _key_region_mean_brightness(
+        render_frame(_flash_notes(), t=1.30, cfg=flash), scene, 60
+    )
+    plain_b = _key_region_mean_brightness(
+        render_frame(_flash_notes(), t=1.30, cfg=plain), scene, 60
+    )
+    # A few frames later the flash has decayed back to the plain brightness.
+    assert later < onset
+    assert abs(later - plain_b) < 1e-6
+
+
+def test_flash_ripple_adds_colored_pixels():
+    from pianoizer import drawing as d
+    from pianoizer.stages.render import render_frame
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    ripple = plain.model_copy(update={"flash_ripple": True})
+    img_plain = render_frame(_flash_notes(), t=1.02, cfg=plain)
+    img_ripple = render_frame(_flash_notes(), t=1.02, cfg=ripple)
+    n_plain = _count_colored_pixels(img_plain, d.FALL_AREA)
+    n_ripple = _count_colored_pixels(img_ripple, d.FALL_AREA)
+    assert n_ripple > n_plain
+    assert img_ripple.size == img_plain.size
