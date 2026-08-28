@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pianoizer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Pianoizer</h1>
+    <p class="tag">Turn a song into a piano falling-notes video.</p>
+
+    <form id="job-form" class="card">
+      <label class="field">
+        <span>YouTube URL or file path</span>
+        <input id="source" name="source" type="text"
+               placeholder="https://www.youtube.com/watch?v=..." required />
+      </label>
+
+      <div class="row">
+        <label class="field small">
+          <span>FPS</span>
+          <input id="fps" name="fps" type="number" min="1" max="120" value="30" />
+        </label>
+      </div>
+
+      <div class="row checks">
+        <label><input id="hands" type="checkbox" /> Colour hands (L/R)</label>
+        <label><input id="key_tempo" type="checkbox" /> Show key &amp; tempo</label>
+        <label><input id="separate" type="checkbox" /> Separate stems</label>
+      </div>
+
+      <div class="row">
+        <label class="field small">
+          <span>Upload audio/MIDI (optional)</span>
+          <input id="file" name="file" type="file"
+                 accept="audio/*,.mid,.midi,video/*" />
+        </label>
+      </div>
+
+      <button id="start" type="submit">Start</button>
+      <span id="err" class="err" role="alert"></span>
+    </form>
+
+    <section class="card">
+      <h2>Jobs</h2>
+      <ul id="jobs" class="jobs"></ul>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
