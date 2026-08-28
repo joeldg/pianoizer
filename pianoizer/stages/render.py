@@ -72,6 +72,18 @@ class Scene:
         active = index.at(t)
         active_pitches = {n.pitch for n in active if n.start <= t <= n.end}
 
+        # M6 render polish options (getattr fallbacks so this works before the
+        # parent adds the config fields; defaults keep golden output unchanged).
+        glow_on = bool(getattr(self.cfg, "glow", False))
+        glow_intensity = float(getattr(self.cfg, "glow_intensity", 0.6))
+        trail_on = bool(getattr(self.cfg, "trail", False))
+        trail_seconds = float(getattr(self.cfg, "trail_length", 0.0))
+        # Blur scales with note width so glow looks consistent across key sizes.
+        glow_blur = max(3, round(self.kb.white_width * 0.45))
+        trail_px = round(trail_seconds * self.pps)
+        if trail_px < 1:
+            trail_on = False
+
         # Falling blocks (white-key notes first, black on top).
         for black_pass in (False, True):
             for n in active:
@@ -91,9 +103,22 @@ class Scene:
                     fill = d.BLACK_NOTE if is_black else d.WHITE_NOTE
                     edge = d.BLACK_NOTE_EDGE if is_black else d.WHITE_NOTE_EDGE
                 pad = 1.0
+                bx0, by0 = x + pad, y_top_px
+                bx1, by1 = x + kw - pad, y_top_px + height
+                # M6: optional glow (behind) and fading trail (behind).
+                if glow_on:
+                    d.glow_block(
+                        img, (bx0, by0, bx1, by1), fill,
+                        blur=glow_blur, intensity=glow_intensity, radius=6,
+                    )
+                if trail_on:
+                    d.note_trail(
+                        img, (bx0, by0, bx1, by1), fill,
+                        length_px=trail_px, fade=0.5,
+                    )
                 d.rounded_block(
                     draw,
-                    x + pad, y_top_px, x + kw - pad, y_top_px + height,
+                    bx0, by0, bx1, by1,
                     fill=fill, outline=edge, radius=6, width=1,
                 )
 

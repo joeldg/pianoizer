@@ -252,3 +252,116 @@ def rounded_block(draw, x0, y0, x1, y1, fill, outline=None, radius=6, width=1):
         draw.rounded_rectangle(
             [x0, y0, x1, y1], radius=r, fill=fill, outline=outline, width=width
         )
+
+
+# ---------------------------------------------------------------------------
+# M6 render polish: soft glow + fading trail (issue #27).
+# ---------------------------------------------------------------------------
+from functools import lru_cache as _lru_cache
+
+from PIL import Image, ImageDraw, ImageFilter
+
+
+def _as_image(img_or_draw):
+    """Return the underlying PIL Image for either an Image or an ImageDraw."""
+    if isinstance(img_or_draw, Image.Image):
+        return img_or_draw
+    im = getattr(img_or_draw, "_image", None)
+    if im is not None:
+        return im
+    raise TypeError("expected a PIL Image or ImageDraw with an _image attribute")
+
+
+@_lru_cache(maxsize=128)
+def _glow_sprite(w: int, h: int, color: tuple, blur: int, intensity: float, radius: int):
+    """Return a cached RGBA sprite: a blurred rounded halo on a padded canvas.
+
+    The sprite is padded by ``pad = blur * 3`` on each side so the Gaussian
+    blur has room to spread. Callers paste it at ``(box_left - pad, box_top - pad)``.
+    """
+    pad = max(1, blur * 3)
+    sw, sh = w + pad * 2, h + pad * 2
+    layer = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    a = max(0, min(255, round(255 * intensity)))
+    r = max(0, min(radius, w // 2, h // 2))
+    fill = (color[0], color[1], color[2], a)
+    if r <= 0:
+        ld.rectangle([pad, pad, pad + w, pad + h], fill=fill)
+    else:
+        ld.rounded_rectangle([pad, pad, pad + w, pad + h], radius=r, fill=fill)
+    if blur > 0:
+        layer = layer.filter(ImageFilter.GaussianBlur(blur))
+    return layer
+
+
+def glow_block(img_or_draw, box, color, *, blur=8, intensity=0.6, radius=6):
+    """Composite a soft, blurred, semi-transparent halo behind a note.
+
+    Args:
+        img_or_draw: target RGB ``Image`` (or an ``ImageDraw`` wrapping one).
+        box: ``(x0, y0, x1, y1)`` of the note rectangle.
+        color: RGB tuple for the halo.
+        blur: Gaussian blur radius in pixels.
+        intensity: peak halo alpha in ``[0, 1]``.
+        radius: corner radius of the halo shape.
+    """
+    base = _as_image(img_or_draw)
+    x0, y0, x1, y1 = (round(v) for v in box)
+    w, h = x1 - x0, y1 - y0
+    if w < 1 or h < 1:
+        return
+    blur = int(max(0, blur))
+    color = (int(color[0]), int(color[1]), int(color[2]))
+    sprite = _glow_sprite(w, h, color, blur, float(intensity), int(radius))
+    pad = max(1, blur * 3)
+    px, py = x0 - pad, y0 - pad
+    if base.mode != "RGBA":
+        # Composite the sprite over the RGB base in place.
+        region = base.convert("RGBA")
+        region.alpha_composite(sprite, (px, py))
+        base.paste(region.convert("RGB"), (0, 0))
+    else:
+        base.alpha_composite(sprite, (px, py))
+
+
+def note_trail(img_or_draw, box, color, *, length_px, fade=0.5):
+    """Draw a vertical gradient tail above a moving note, fading to transparent.
+
+    The tail rises ``length_px`` pixels above the top edge of ``box``. Alpha is
+    strongest at the note (``fade`` of full) and decays to zero at the far end.
+
+    Args:
+        img_or_draw: target RGB ``Image`` (or an ``ImageDraw`` wrapping one).
+        box: ``(x0, y0, x1, y1)`` of the note rectangle; the tail sits above y0.
+        color: RGB tuple for the tail.
+        length_px: length of the tail in pixels.
+        fade: alpha at the note edge in ``[0, 1]`` (decays to 0 at the top).
+    """
+    length_px = round(length_px)
+    if length_px < 1:
+        return
+    base = _as_image(img_or_draw)
+    x0, y0, x1, _y1 = (round(v) for v in box)
+    w = x1 - x0
+    if w < 1:
+        return
+    color = (int(color[0]), int(color[1]), int(color[2]))
+    peak = max(0.0, min(1.0, float(fade)))
+    layer = Image.new("RGBA", (base.width, base.height), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    for i in range(length_px):
+        y = y0 - 1 - i
+        if y < 0:
+            break
+        frac = 1.0 - (i / length_px)  # 1 at note, 0 at far end
+        a = round(255 * peak * frac)
+        if a <= 0:
+            continue
+        ld.line([(x0, y), (x1 - 1, y)], fill=(color[0], color[1], color[2], a))
+    if base.mode != "RGBA":
+        region = base.convert("RGBA")
+        region.alpha_composite(layer)
+        base.paste(region.convert("RGB"), (0, 0))
+    else:
+        base.alpha_composite(layer)

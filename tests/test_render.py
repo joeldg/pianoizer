@@ -75,3 +75,49 @@ def test_title_card_hands_legend_runs():
     cfg = RenderConfig(width=320, height=180, fps=10, hands=True)
     frames = list(title_card_frames(cfg, "Song", subtitle="C major | 120 BPM", seconds=0.5))
     assert len(frames) == 5
+
+
+def _count_colored_pixels(img, bg):
+    """Count pixels differing from the background color."""
+    px = img.load()
+    n = 0
+    for y in range(img.height):
+        for x in range(img.width):
+            if px[x, y] != bg:
+                n += 1
+    return n
+
+
+def test_glow_disabled_matches_plain_path():
+    # Default output (no polish fields) equals output with polish explicitly
+    # disabled: no regression to the plain golden path.
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    off = plain.model_copy(update={"glow": False, "trail": False})
+    a = render_frame(_notes(), t=1.0, cfg=plain).tobytes()
+    b = render_frame(_notes(), t=1.0, cfg=off).tobytes()
+    assert a == b
+
+
+def test_glow_enabled_adds_colored_pixels():
+    from pianoizer import drawing as d
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    glow = plain.model_copy(update={"glow": True, "glow_intensity": 0.7})
+    img_plain = render_frame(_notes(), t=1.0, cfg=plain)
+    img_glow = render_frame(_notes(), t=1.0, cfg=glow)
+    # FALL_AREA is the background of the falling region.
+    n_plain = _count_colored_pixels(img_plain, d.FALL_AREA)
+    n_glow = _count_colored_pixels(img_glow, d.FALL_AREA)
+    assert n_glow > n_plain
+    # Enabling glow must not change frame dimensions.
+    assert img_glow.size == img_plain.size
+
+
+def test_trail_enabled_adds_colored_pixels():
+    from pianoizer import drawing as d
+    plain = RenderConfig(width=320, height=200, fps=30, lead_time=2.0)
+    trail = plain.model_copy(update={"trail": True, "trail_length": 0.3})
+    img_plain = render_frame(_notes(), t=1.0, cfg=plain)
+    img_trail = render_frame(_notes(), t=1.0, cfg=trail)
+    n_plain = _count_colored_pixels(img_plain, d.FALL_AREA)
+    n_trail = _count_colored_pixels(img_trail, d.FALL_AREA)
+    assert n_trail > n_plain
