@@ -13,8 +13,9 @@ See **[DESIGN.md](DESIGN.md)** for the full design.
 
 ## Status
 
-Early scaffold (M0). Build order: render MIDI->video first, then add YouTube
-fetch + audio-to-MIDI transcription. See the milestones in DESIGN.md.
+M1 complete: `pianoizer render notes.mid --out out.mp4` produces a
+falling-notes MP4 with a labeled keyboard and title card. Next: YouTube fetch +
+audio-to-MIDI transcription (M2). See the milestones in DESIGN.md.
 
 ## Requirements
 
@@ -22,11 +23,26 @@ fetch + audio-to-MIDI transcription. See the milestones in DESIGN.md.
 - `ffmpeg` on PATH
 - `yt-dlp` (installed as a Python dependency)
 
-## Quick start (planned)
+## Quick start
 
     uv sync
-    # render an existing MIDI to video (available first):
+    # M1 (available now): render an existing MIDI to a falling-notes video
     uv run pianoizer render notes.mid --out out.mp4
+
+    # useful flags:
+    #   --keys {61,76,88}     keyboard size (default 88)
+    #   --fps {30,60}         frame rate (default 30)
+    #   --lead-time SECONDS   how long notes fall before landing (default 3.0)
+    #   --octave-numbers      label keys as C4 instead of C
+    #   --label-black         also label black keys
+    #   --title "TEXT"        title-card text (default: MIDI filename)
+    #   --subtitle "TEXT"     title-card subtitle / source
+    #   --no-title            skip the title card
+    #   --audio FILE          mux an audio track instead of silence
+
+`ffmpeg` is provided automatically via the `imageio-ffmpeg` dependency, so no
+system install is required for rendering.
+
     # full pipeline from YouTube (later milestone):
     uv run pianoizer "https://youtube.com/watch?v=..." --out song.mp4
 
