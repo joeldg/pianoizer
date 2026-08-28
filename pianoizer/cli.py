@@ -43,6 +43,10 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         trail_length=getattr(args, "trail_length", 0.0),
         keypress_flash=getattr(args, "keypress_flash", False),
         flash_ripple=getattr(args, "flash_ripple", False),
+        fingering=getattr(args, "fingering", False),
+        particles=getattr(args, "particles", False),
+        particle_intensity=getattr(args, "particle_intensity", 0.6),
+        hand_split=getattr(args, "hand_split", False),
     )
 
 
@@ -82,6 +86,14 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
                         help="Trail length in seconds (default 0)")
     parser.add_argument("--keypress-flash", action="store_true",
                         help="Flash a key when a note lands")
+    parser.add_argument("--fingering", action="store_true",
+                        help="Draw suggested finger numbers (1-5) on notes")
+    parser.add_argument("--particles", action="store_true",
+                        help="Particle burst when a note lands")
+    parser.add_argument("--particle-intensity", type=float, default=0.6,
+                        help="Particle peak alpha/count in [0,1] (default 0.6)")
+    parser.add_argument("--hand-split", action="store_true",
+                        help="Split falling notes into left/right lanes")
     parser.add_argument("--flash-ripple", action="store_true",
                         help="Expanding ripple outlines at note onset")
 

@@ -194,3 +194,62 @@ def test_flash_ripple_adds_colored_pixels():
     n_ripple = _count_colored_pixels(img_ripple, d.FALL_AREA)
     assert n_ripple > n_plain
     assert img_ripple.size == img_plain.size
+
+
+# --- M6 learning + layout render integration (issues #30/#31/#32) ----------
+def _hand_notes():
+    return [
+        Note(start=0.5, end=1.5, pitch=48, hand="L"),
+        Note(start=0.5, end=1.5, pitch=72, hand="R"),
+        Note(start=1.0, end=2.0, pitch=60, hand="L"),
+    ]
+
+
+def test_fingering_changes_render():
+    off = RenderConfig(width=640, height=360, fps=30, lead_time=2.0)
+    on = RenderConfig(width=640, height=360, fps=30, lead_time=2.0, fingering=True)
+    a = render_frame(_hand_notes(), t=0.6, cfg=off).tobytes()
+    b = render_frame(_hand_notes(), t=0.6, cfg=on).tobytes()
+    assert a != b
+
+
+def test_particles_changes_render():
+    off = RenderConfig(width=640, height=360, fps=30, lead_time=2.0)
+    on = RenderConfig(width=640, height=360, fps=30, lead_time=2.0, particles=True)
+    # A short time after onset the burst has fanned out above the keyboard.
+    t = _hand_notes()[0].start + 0.12
+    a = render_frame(_hand_notes(), t=t, cfg=off).tobytes()
+    b = render_frame(_hand_notes(), t=t, cfg=on).tobytes()
+    assert a != b
+
+
+def test_particles_persist_after_short_note_release():
+    # A very short note (released almost immediately) still shows its burst
+    # for the full particle lifetime after onset.
+    short = [Note(start=0.5, end=0.52, pitch=60, hand="R")]
+    off = RenderConfig(width=640, height=360, fps=30, lead_time=2.0)
+    on = RenderConfig(width=640, height=360, fps=30, lead_time=2.0, particles=True)
+    t = 0.5 + 0.2  # well after the note ended, within the burst lifetime
+    a = render_frame(short, t=t, cfg=off).tobytes()
+    b = render_frame(short, t=t, cfg=on).tobytes()
+    assert a != b
+
+
+def test_hand_split_changes_render():
+    off = RenderConfig(width=640, height=360, fps=30, lead_time=2.0)
+    on = RenderConfig(width=640, height=360, fps=30, lead_time=2.0, hand_split=True)
+    a = render_frame(_hand_notes(), t=0.6, cfg=off).tobytes()
+    b = render_frame(_hand_notes(), t=0.6, cfg=on).tobytes()
+    assert a != b
+
+
+def test_defaults_unchanged_for_new_flags():
+    # A config that leaves the new flags at their defaults must render exactly
+    # like the historical config (byte-for-byte), protecting golden output.
+    base = RenderConfig(width=640, height=360, fps=30, lead_time=2.0)
+    a = render_frame(_hand_notes(), t=0.6, cfg=base).tobytes()
+    b = render_frame(_hand_notes(), t=0.6, cfg=base).tobytes()
+    assert a == b
+    assert base.fingering is False
+    assert base.particles is False
+    assert base.hand_split is False

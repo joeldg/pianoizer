@@ -86,6 +86,15 @@ def _config_from_options(options: dict[str, Any]) -> RenderConfig:
         fields["keypress_flash"] = bool(options["keypress_flash"])
     if options.get("flash_ripple") is not None:
         fields["flash_ripple"] = bool(options["flash_ripple"])
+    # Learning + layout (issues #30/#31/#32).
+    if options.get("fingering") is not None:
+        fields["fingering"] = bool(options["fingering"])
+    if options.get("particles") is not None:
+        fields["particles"] = bool(options["particles"])
+    if options.get("particle_intensity") is not None:
+        fields["particle_intensity"] = max(0.0, min(1.0, float(options["particle_intensity"])))
+    if options.get("hand_split") is not None:
+        fields["hand_split"] = bool(options["hand_split"])
     return RenderConfig(**fields)
 
 

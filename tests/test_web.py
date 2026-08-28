@@ -270,6 +270,7 @@ def test_index_exposes_m6_options(client):
     for control_id in (
         "transcribe_preset", "snap_timing", "theme", "glow", "glow_intensity",
         "trail", "trail_length", "keypress_flash", "flash_ripple",
+        "fingering", "particles", "particle_intensity", "hand_split",
     ):
         assert f'id="{control_id}"' in html, control_id
 
@@ -300,6 +301,10 @@ def test_m6_options_flow_to_config(monkeypatch):
             "trail_length": 0.4,
             "keypress_flash": True,
             "flash_ripple": True,
+            "fingering": True,
+            "particles": True,
+            "particle_intensity": 1.5,
+            "hand_split": True,
         }
         resp = c.post("/api/jobs", json=body)
         assert resp.status_code == 202
@@ -315,6 +320,9 @@ def test_m6_options_flow_to_config(monkeypatch):
     assert cfg.glow is True and cfg.glow_intensity == 0.8
     assert cfg.trail is True and cfg.trail_length == 0.4
     assert cfg.keypress_flash is True and cfg.flash_ripple is True
+    assert cfg.fingering is True and cfg.hand_split is True
+    assert cfg.particles is True
+    assert cfg.particle_intensity == 1.0  # clamped from 1.5
     assert captured["kwargs"].get("separate") is True
 
 

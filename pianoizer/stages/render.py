@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 
 from .. import drawing as d
 from ..config import RenderConfig
-from ..geometry import is_visible, note_block, pixels_per_second
+from ..geometry import hand_lane_rect, is_visible, note_block, pixels_per_second
 from ..keyboard import Keyboard
 from ..model import Note
 
@@ -23,6 +23,7 @@ class NoteIndex:
 
     def __init__(self, notes: list[Note], lead_time: float) -> None:
         self.lead_time = lead_time
+        self.notes = notes
         self.buckets: dict[int, list[Note]] = {}
         for n in notes:
             # A note is relevant from (start - lead_time) until end.
@@ -39,6 +40,26 @@ class NoteIndex:
             for n in self.buckets.get(bb, ()):  # nearby buckets only
                 key = id(n)
                 if key not in seen and is_visible(n.start, n.end, t, self.lead_time):
+                    seen.add(key)
+                    out.append(n)
+        return out
+
+    def recent_onsets(self, t: float, window: float) -> list[Note]:
+        """Return notes whose ONSET is within ``[t - window, t]``.
+
+        Used for effects (e.g. particle bursts) that persist for a short time
+        after a note lands, even once the note itself has been released.
+        """
+        b = int(t // _BUCKET_SECONDS)
+        span = int(window // _BUCKET_SECONDS) + 1
+        out = []
+        seen = set()
+        for bb in range(b - span, b + 1):
+            for n in self.buckets.get(bb, ()):
+                key = id(n)
+                if key in seen:
+                    continue
+                if t - window <= n.start <= t + 1e-6:
                     seen.add(key)
                     out.append(n)
         return out
@@ -62,6 +83,8 @@ class Scene:
             label_black=cfg.label_black,
         )
         self.pps = pixels_per_second(self.y_key, self.y_top, cfg.lead_time)
+        self._finger_map = None  # lazy: id(note) -> finger (issue #30)
+        self._split_map = None   # lazy: id(note) -> "L"/"R" (issue #32)
 
     # -- drawing -------------------------------------------------------------
     def draw_frame(self, index: NoteIndex, t: float) -> Image.Image:
@@ -80,6 +103,15 @@ class Scene:
         trail_seconds = float(getattr(self.cfg, "trail_length", 0.0))
         flash_on = bool(getattr(self.cfg, "keypress_flash", False))
         ripple_on = bool(getattr(self.cfg, "flash_ripple", False))
+        # M6 learning + layout options (issues #30/#31/#32).
+        fingering_on = bool(getattr(self.cfg, "fingering", False))
+        particles_on = bool(getattr(self.cfg, "particles", False))
+        particle_intensity = float(getattr(self.cfg, "particle_intensity", 0.6))
+        split_on = bool(getattr(self.cfg, "hand_split", False))
+        if fingering_on:
+            self._ensure_fingering(index)
+        if split_on:
+            self._ensure_split_hands(index)
         # Blur scales with note width so glow looks consistent across key sizes.
         glow_blur = max(3, round(self.kb.white_width * 0.45))
         trail_px = round(trail_seconds * self.pps)
@@ -92,6 +124,13 @@ class Scene:
                 if self.kb.key(n.pitch).is_black != black_pass:
                     continue
                 x, kw, is_black = self.kb.key_rect(n.pitch)
+                # M6 #32: in split mode nudge the falling column into the hand's
+                # lane. The note still LANDS on its true key (drawn unchanged).
+                if split_on:
+                    x, kw = hand_lane_rect(
+                        x, kw, self._split_hand(n),
+                        canvas_width=self.w, offset_frac=0.5,
+                    )
                 y_top_px, height = note_block(
                     n.start, n.end, t, self.y_key, self.y_top, self.pps
                 )
@@ -123,13 +162,89 @@ class Scene:
                     bx0, by0, bx1, by1,
                     fill=fill, outline=edge, radius=6, width=1,
                 )
+                # M6 #30: draw the suggested finger number on the block.
+                if fingering_on:
+                    finger = self._finger_for(n)
+                    if finger:
+                        d.fingering_label(draw, (bx0, by0, bx1, by1), finger)
 
         self._draw_keyboard(draw, active_pitches)
 
         # M6: keypress flash + optional ripple for keys that just landed.
         if flash_on or ripple_on:
             self._draw_keypress_flashes(img, active, t, flash_on, ripple_on)
+        # M6 #31: particle burst rising from keys that just landed.
+        if particles_on:
+            recent = index.recent_onsets(t, _PARTICLE_LIFETIME)
+            self._draw_particles(img, recent, t, particle_intensity)
         return img
+
+    # -- M6 learning + layout helpers (issues #30/#31/#32) -------------------
+    def _ensure_fingering(self, index: NoteIndex) -> None:
+        """Lazily compute a finger number per note (keyed by id)."""
+        if getattr(self, "_finger_map", None) is not None:
+            return
+        from ..fingering import assign_fingering
+        from ..hands import assign_hands
+        notes = index.notes
+        # Fingering needs a hand estimate; if notes have none, derive one for
+        # placement WITHOUT recoloring (we only read .hand on copies here).
+        if notes and all(n.hand not in ("L", "R") for n in notes):
+            hinted = assign_hands(notes)
+        else:
+            hinted = notes
+        fingers = assign_fingering(hinted)
+        self._finger_map = {id(n): f for n, f in zip(notes, fingers)}
+
+    def _finger_for(self, note: Note) -> int:
+        m = getattr(self, "_finger_map", None)
+        return m.get(id(note), 0) if m else 0
+
+    def _ensure_split_hands(self, index: NoteIndex) -> None:
+        """Lazily compute an L/R hand per note for lane placement (keyed by id).
+
+        Uses the note's own hand when set; otherwise falls back to the
+        deterministic pitch-midpoint split WITHOUT changing note colors.
+        """
+        if getattr(self, "_split_map", None) is not None:
+            return
+        from ..hands import assign_hands
+        notes = index.notes
+        if notes and all(n.hand not in ("L", "R") for n in notes):
+            hinted = assign_hands(notes)
+            self._split_map = {id(n): h.hand for n, h in zip(notes, hinted)}
+        else:
+            self._split_map = {id(n): n.hand for n in notes}
+
+    def _split_hand(self, note: Note) -> str | None:
+        m = getattr(self, "_split_map", None)
+        if m is not None:
+            return m.get(id(note), note.hand)
+        return note.hand
+
+    def _draw_particles(self, img, candidates, t, intensity) -> None:
+        """Spawn a fading particle burst for keys that landed within the window."""
+        for n in candidates:
+            age = t - n.start
+            # Particles live for the burst lifetime after onset, even if the
+            # (possibly very short) note has already been released.
+            if age < -1e-6 or age >= _PARTICLE_LIFETIME:
+                continue
+            is_black = self.kb.key(n.pitch).is_black
+            if n.hand == "L":
+                color = d.LEFT_NOTE
+            elif n.hand == "R":
+                color = d.RIGHT_NOTE
+            else:
+                color = d.BLACK_NOTE if is_black else d.WHITE_NOTE
+            x, kw, _ = self.kb.key_rect(n.pitch)
+            origin = (x + kw / 2, self.y_key)
+            seed = (int(n.pitch) << 16) ^ round(n.start * 1000)
+            d.particle_burst(
+                img, origin, color,
+                age=age, lifetime=_PARTICLE_LIFETIME,
+                count=12, intensity=intensity, seed=seed,
+            )
 
     def _key_region(self, pitch: int) -> tuple[float, float, float, float]:
         """Return the on-keyboard rectangle for ``pitch`` (black keys shorter)."""
@@ -313,6 +428,7 @@ def all_frames(notes: list[Note], cfg: RenderConfig, *, title: str | None = None
 # parent-owned) using Pillow RGBA compositing. Default OFF; the plain path is
 # byte-for-byte unchanged.
 # ---------------------------------------------------------------------------
+_PARTICLE_LIFETIME = 0.35  # seconds a particle burst lives (issue #31)
 _FLASH_ONSET = 0.08     # seconds after start still counted as "just landed"
 _FLASH_DECAY = 0.15     # seconds over which the flash fades to nothing
 _RIPPLE_DECAY = 0.22    # seconds over which ripple outlines expand and fade
