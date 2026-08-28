@@ -28,13 +28,14 @@ h2 { margin: 0 0 12px; font-size: 18px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .field.small { max-width: 220px; }
 .field span { font-size: 13px; color: var(--muted); }
-input[type="text"], input[type="number"], input[type="file"] {
+input[type="text"], input[type="number"] {
   background: #0f1119;
   border: 1px solid #2a3048;
   color: var(--fg);
   border-radius: 8px;
   padding: 9px 10px;
   font-size: 14px;
+  width: 100%;
 }
 .row { display: flex; gap: 16px; flex-wrap: wrap; }
 .row.checks { margin: 4px 0 14px; }
@@ -49,7 +50,39 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: 0.6; cursor: default; }
+button.ghost {
+  background: transparent;
+  border: 1px solid #2a3048;
+  color: var(--fg);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+button.ghost:hover { border-color: var(--accent); }
+
+/* Drag-and-drop zone */
+.dropzone {
+  border: 2px dashed #2a3048;
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 14px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: rgba(91, 140, 255, 0.08);
+}
+.dropzone .dz-icon { color: var(--muted); display: block; margin: 0 auto 6px; }
+.dropzone .dz-text { font-size: 14px; }
+.dz-browse { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.dz-input { display: none; }
+.dz-filename { display: block; margin-top: 8px; font-size: 13px; color: var(--ok); }
+
 .err { color: var(--err); margin-left: 12px; font-size: 13px; }
+.jobs-head { display: flex; justify-content: space-between; align-items: center; }
+.empty { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
 .jobs { list-style: none; margin: 0; padding: 0; }
 .job {
   border: 1px solid #2a3048;
@@ -63,9 +96,10 @@ button:disabled { opacity: 0.6; cursor: default; }
 .job .status.done { color: var(--ok); }
 .job .status.error { color: var(--err); }
 .bar {
-  height: 8px;
+  position: relative;
+  height: 18px;
   background: #0f1119;
-  border-radius: 4px;
+  border-radius: 5px;
   overflow: hidden;
   margin: 10px 0 6px;
 }
@@ -76,12 +110,45 @@ button:disabled { opacity: 0.6; cursor: default; }
   background: var(--accent);
   transition: width 0.3s ease;
 }
+.bar .bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--fg);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
 .job .meta { font-size: 12px; color: var(--muted); }
-.job a.dl {
-  display: inline-block;
+.job .actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
   margin-top: 8px;
+}
+.job a.dl {
   color: var(--ok);
   text-decoration: none;
   font-size: 14px;
 }
+.job .preview {
+  display: block;
+  margin-top: 10px;
+  width: 100%;
+  max-width: 360px;
+  border-radius: 8px;
+  background: #000;
+}
+.job .note { color: var(--muted); font-size: 12px; margin-top: 6px; font-style: italic; }
 .job .errmsg { color: var(--err); font-size: 13px; margin-top: 6px; }
+
+@media (max-width: 520px) {
+  .wrap { padding: 16px 12px 48px; }
+  .field.small { max-width: none; }
+  .job .head { flex-direction: column; gap: 4px; }
+  .job .preview { max-width: 100%; }
+}

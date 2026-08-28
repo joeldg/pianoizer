@@ -6,6 +6,7 @@ suite ``importorskip``s it and still passes on base installs.
 """
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -146,6 +147,68 @@ def test_list_jobs(client):
 def test_unknown_job_404(client):
     assert client.get("/api/jobs/nope").status_code == 404
     assert client.get("/api/jobs/nope/download").status_code == 404
+
+
+def test_delete_queued_job_cancels(monkeypatch):
+    """DELETE a still-queued job -> 200 + status 'error' (cancel marks it error)."""
+    # A pipeline that blocks so the first job stays running and the second
+    # queued when we cancel it (max_workers=1).
+    release = {"go": False}
+
+    def slow(source, out_path, config, *, work_dir, on_stage=None, **kwargs):
+        while not release["go"]:
+            time.sleep(0.01)
+        out = Path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"FAKEMP4")
+        return str(out)
+
+    monkeypatch.setattr(jobs_mod, "run_pipeline", slow)
+    manager = JobManager(max_workers=1)
+    app = create_app(manager)
+    with TestClient(app) as c:
+        first = c.post("/api/jobs", json={"source": "a.wav"}).json()["id"]
+        # Wait until the first job is actually running so the second stays queued.
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if c.get(f"/api/jobs/{first}").json()["status"] == "running":
+                break
+            time.sleep(0.02)
+        second = c.post("/api/jobs", json={"source": "b.wav"}).json()["id"]
+
+        resp = c.delete(f"/api/jobs/{second}")
+        assert resp.status_code == 200
+        data = resp.json()
+        # There is no distinct 'cancelled' status: a cancelled queued job is error.
+        assert data["status"] == "error"
+        assert data["id"] == second
+        assert "created_at" in data
+        assert data["created_at"] is not None
+        assert "finished_at" in data
+        # to_dict must stay JSON-serializable.
+        json.dumps(data)
+
+        release["go"] = True
+        _wait_for_status(c, first, "done")
+    manager.shutdown(wait=True)
+
+
+def test_delete_unknown_job_404(client):
+    assert client.delete("/api/jobs/nope").status_code == 404
+
+
+def test_delete_finished_job_returns_current_dict(client):
+    """DELETE a job that cannot be cancelled -> 200 with the current dict."""
+    job_id = client.post("/api/jobs", json={"source": "done.wav"}).json()["id"]
+    done = _wait_for_status(client, job_id, "done")
+    assert done["status"] == "done"
+
+    resp = client.delete(f"/api/jobs/{job_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    # cancel() returned False; the done job is untouched, not an error.
+    assert data["id"] == job_id
+    assert data["status"] == "done"
 
 
 def test_upload_then_use_as_source(client, tmp_path):

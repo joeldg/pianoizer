@@ -139,6 +139,22 @@ def create_app(manager: JobManager | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="job not found")
         return job.to_dict()
 
+    @app.delete("/api/jobs/{job_id}")
+    def cancel_job(job_id: str) -> dict[str, Any]:
+        """Cancel a queued job and return its updated dict.
+
+        ``JobManager.cancel`` only stops jobs still in ``queued`` (marking them
+        ``error`` with a cancellation message); running/done/errored jobs are
+        left untouched. Either way, for an *existing* job we return its current
+        :meth:`Job.to_dict` (HTTP 200) so the UI can reflect reality. Only an
+        unknown ``job_id`` yields 404.
+        """
+        job = mgr.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        mgr.cancel(job_id)
+        return job.to_dict()
+
     @app.get("/api/jobs/{job_id}/download")
     def download(job_id: str) -> FileResponse:
         """Download a finished job's mp4.
