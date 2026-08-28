@@ -18,11 +18,30 @@ small offline sample with `uv run python scripts/make_sample.py`.
 
 ## Status
 
-M3 complete: quality features on top of the M2 pipeline — MIDI post-processing
-(drop spurious blips, merge, clamp), optional demucs source separation
-(`--separate`), key/tempo detection (`--key-tempo`), and a two-hand color split
-(`--hands`, left=red / right=green). Transcription is still approximate (see
-limitations below). Next: polish/UX (M4). See the milestones in DESIGN.md.
+M5 complete: the full CLI plus a web UI and batch runner.
+- **M1–M2:** YouTube/local file -> transcribe -> render -> falling-notes MP4.
+- **M3 quality:** MIDI cleanup, optional demucs separation (`--separate`),
+  key/tempo detection (`--key-tempo`), two-hand color split (`--hands`).
+- **M4 polish:** TOML config file (`--config`), progress HUD (`--progress`),
+  polished title cards, docs and a reproducible sample.
+- **M5 web/batch:** a browser UI + HTTP API (`pianoizer-web`) and a headless
+  batch runner (`pianoizer-batch`).
+
+Transcription is still approximate (see limitations below).
+See the milestones in DESIGN.md.
+
+## Web UI
+
+    uv sync --extra web
+    uv run pianoizer-web --host 127.0.0.1 --port 8000
+    # open http://127.0.0.1:8000 : paste a URL, pick options, watch progress,
+    # download the finished mp4. Also exposes a JSON API under /api/jobs.
+
+## Batch
+
+    # render many sources at once (a directory, a list file, or one file)
+    uv run pianoizer-batch sources.txt --out-dir out/ --workers 2 --hands
+    # sources.txt: one URL or file path per line ('#' comments allowed)
 
 ## Requirements
 

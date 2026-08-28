@@ -34,14 +34,25 @@ transcribe = [
 separate = [
     "demucs>=4.0.0",
 ]
+# Web UI + HTTP API. Kept optional so the CLI installs stay lean.
+web = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+]
 
 [project.scripts]
 pianoizer = "pianoizer.cli:main"
+pianoizer-web = "pianoizer.web:main"
+pianoizer-batch = "pianoizer.batch:main"
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.5.0",
+    # TestClient (fastapi) needs httpx; web tests importorskip if fastapi is
+    # not installed, but httpx must be present for them to run.
+    "httpx>=0.27",
 ]
 
 [build-system]
