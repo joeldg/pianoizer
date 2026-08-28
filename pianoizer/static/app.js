@@ -241,7 +241,8 @@ function renderJob(job) {
   if (done) {
     const a = document.createElement("a");
     a.className = "dl";
-    a.href = "/api/jobs/" + job.id + "/download";
+    a.href = "/api/jobs/" + job.id + "/download?dl=1";
+    a.setAttribute("download", "");
     a.textContent = "\u2b07 Download mp4";
     actions.append(a);
   }

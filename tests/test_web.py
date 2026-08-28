@@ -112,6 +112,18 @@ def test_job_progresses_to_done_and_download(client):
     assert dl.status_code == 200
     assert dl.content == b"FAKEMP4"
     assert dl.headers["content-type"].startswith("video/mp4")
+    # Served inline by default so a browser <video> plays it in-page.
+    assert dl.headers["content-disposition"].startswith("inline")
+    # ?dl=1 forces a file download.
+    dl2 = client.get(f"/api/jobs/{job_id}/download?dl=1")
+    assert dl2.status_code == 200
+    assert dl2.headers["content-disposition"].startswith("attachment")
+    # Range requests work (needed for <video> seeking).
+    rng = client.get(
+        f"/api/jobs/{job_id}/download", headers={"Range": "bytes=0-2"}
+    )
+    assert rng.status_code == 206
+    assert rng.headers.get("accept-ranges") == "bytes"
 
 
 def test_download_conflict_before_done(monkeypatch):

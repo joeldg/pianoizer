@@ -156,11 +156,16 @@ def create_app(manager: JobManager | None = None) -> FastAPI:
         return job.to_dict()
 
     @app.get("/api/jobs/{job_id}/download")
-    def download(job_id: str) -> FileResponse:
-        """Download a finished job's mp4.
+    def download(job_id: str, dl: bool = False) -> FileResponse:
+        """Serve a finished job's mp4.
+
+        By default the file is served *inline* (``Content-Disposition: inline``)
+        so a browser ``<video>`` element can play it in-page. Pass ``?dl=1`` to
+        force a file download (``Content-Disposition: attachment``).
 
         Returns 404 for an unknown job, 409 while the job is not yet done, and
-        404 if the result file is missing on disk.
+        404 if the result file is missing on disk. ``FileResponse`` honors
+        HTTP range requests, so seeking within the video works.
         """
         job = mgr.get(job_id)
         if job is None:
@@ -170,9 +175,11 @@ def create_app(manager: JobManager | None = None) -> FastAPI:
         result = Path(job.result_path)
         if not result.exists():
             raise HTTPException(status_code=404, detail="result file missing")
+        disposition = "attachment" if dl else "inline"
         return FileResponse(
             str(result),
             media_type="video/mp4",
+            content_disposition_type=disposition,
             filename=result.name,
         )
 
