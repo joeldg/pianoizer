@@ -95,7 +95,12 @@ def transcribe(
     work.mkdir(parents=True, exist_ok=True)
     out_path = work / "notes.mid"
 
-    from basic_pitch.inference import predict
+    # Import the inference entrypoint through the same guard as the model load so
+    # a missing install raises the actionable message, not a raw ImportError.
+    try:
+        from basic_pitch.inference import predict
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(_MISSING_DEP_MSG) from exc
 
     model = _load_model()
 
