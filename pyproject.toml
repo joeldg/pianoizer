@@ -19,7 +19,17 @@ dependencies = [
 # Heavy / optional ML deps kept separate so the render path installs fast.
 [project.optional-dependencies]
 transcribe = [
+    # basic-pitch hard-requires tensorflow<2.15.1 on Linux/py3.11. We run the
+    # bundled ONNX model at runtime (see stages/transcribe.py) and never touch
+    # the TF graph, but TF still gets imported at `import basic_pitch`. TF 2.14
+    # cannot import against NumPy 2.x, so we pin numpy<2 whenever this optional
+    # group is installed. onnxruntime is what actually runs the model.
     "basic-pitch>=0.3.0",
+    "onnxruntime>=1.16.0",
+    "numpy<2",
+    # resampy (pulled in by basic-pitch) still imports pkg_resources, which
+    # setuptools>=81 removed. Pin setuptools so the import keeps working.
+    "setuptools<81",
 ]
 separate = [
     "demucs>=4.0.0",
