@@ -12,6 +12,8 @@ is lighter and avoids the TF graph. We fall back to basic-pitch's default model
 """
 from __future__ import annotations
 
+import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -20,6 +22,37 @@ _MISSING_DEP_MSG = (
     "dependencies with:\n\n    uv sync --extra transcribe\n"
 )
 
+_quieted = False
+
+
+def _quiet_ml_logs() -> None:
+    """Suppress TensorFlow / basic-pitch startup noise before they import.
+
+    basic-pitch pulls in the full TensorFlow stack, which prints many INFO/
+    WARNING/"E" lines at import (oneDNN, missing CUDA/cuDNN/cuFFT/cuBLAS/
+    TensorRT, AVX hints) plus basic-pitch's own ``WARNING:root`` lines about
+    optional CoreML/TFLite backends. These are harmless on a CPU-only machine
+    but drown the log. We quiet them once, before the first TF import.
+
+    ``TF_CPP_MIN_LOG_LEVEL`` MUST be set before TensorFlow is imported to take
+    effect. Set ``PIANOIZER_VERBOSE_ML=1`` to keep the original noisy output.
+    """
+    global _quieted
+    if _quieted or os.environ.get("PIANOIZER_VERBOSE_ML"):
+        return
+    # 2 = hide INFO + WARNING C++ logs (keep real errors).
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+    # Silence the oneDNN "custom operations are on" notice.
+    os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+    # basic-pitch logs its CoreML/TFLite hints via the root logger at WARNING.
+    logging.getLogger().setLevel(logging.ERROR)
+    try:
+        # Python-side TF logger, in case TF is already partially imported.
+        logging.getLogger("tensorflow").setLevel(logging.ERROR)
+    except Exception:
+        pass
+    _quieted = True
+
 
 def _load_model():
     """Return a basic-pitch ``Model``, preferring the ONNX backend.
@@ -27,6 +60,7 @@ def _load_model():
     Raises :class:`ModuleNotFoundError` with an actionable message when
     basic-pitch itself is not installed.
     """
+    _quiet_ml_logs()
     try:
         import basic_pitch  # noqa: F401
         from basic_pitch import FilenameSuffix, build_icassp_2022_model_path
@@ -96,6 +130,7 @@ def transcribe(
 
     # Import the inference entrypoint through the same guard as the model load so
     # a missing install raises the actionable message, not a raw ImportError.
+    _quiet_ml_logs()
     try:
         from basic_pitch.inference import predict
     except ModuleNotFoundError as exc:
