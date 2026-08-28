@@ -67,6 +67,17 @@ def test_index_serves_html(client):
     assert "Pianoizer" in resp.text
 
 
+def test_index_cache_busts_assets(client):
+    """The index injects a version query on app.js/style.css so browsers do
+    not run a stale cached bundle after an update."""
+    import re
+
+    html = client.get("/").text
+    assert "__ASSET_VER__" not in html
+    assert re.search(r"app\.js\?v=\d+", html)
+    assert re.search(r"style\.css\?v=\d+", html)
+
+
 def test_static_assets_have_progress_detail(client):
     """The static JS wires friendly stage labels, a step counter, and a
     capped-while-running progress bar (M5-5). Read-only sanity checks."""

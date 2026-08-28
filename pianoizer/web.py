@@ -102,8 +102,19 @@ def create_app(manager: JobManager | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
-        """Serve the single-page front-end."""
+        """Serve the single-page front-end.
+
+        A cache-busting token derived from the static assets' newest mtime is
+        injected into ``__ASSET_VER__`` so browsers always fetch the current
+        ``app.js``/``style.css`` after an update instead of a stale cached copy.
+        """
         html = (_STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        newest = 0.0
+        for name in ("app.js", "style.css"):
+            asset = _STATIC_DIR / name
+            if asset.exists():
+                newest = max(newest, asset.stat().st_mtime)
+        html = html.replace("__ASSET_VER__", str(int(newest)))
         return HTMLResponse(content=html)
 
     @app.post("/api/jobs", status_code=202)
