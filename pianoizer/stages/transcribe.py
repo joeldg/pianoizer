@@ -24,6 +24,73 @@ _MISSING_DEP_MSG = (
 
 _quieted = False
 
+# A0 is the lowest note on a standard 88-key piano (~27.5 Hz). Used as a low
+# frequency bound to reject sub-piano rumble in the solo-piano preset.
+_A0_HZ = 27.5
+
+# Named threshold presets for different source material. Each maps a preset name
+# to a dict of keyword arguments accepted by :func:`transcribe`. Only the keys a
+# preset wants to override are included; unset keys keep :func:`transcribe`'s
+# defaults (or explicit caller kwargs, which always win). See :func:`apply_preset`.
+PRESETS: dict[str, dict] = {
+    # Current defaults: no overrides, kept for symmetry / explicit selection.
+    "default": {},
+    # Solo piano: cleaner output, fewer spurious notes. Higher onset/frame
+    # thresholds and a low bound at A0 to drop sub-piano rumble.
+    "solo-piano": {
+        "min_note_len": 0.08,
+        "onset_threshold": 0.6,
+        "frame_threshold": 0.4,
+        "min_frequency": _A0_HZ,
+    },
+    # Dense pop / full-band mix: catch more notes in a busy arrangement with
+    # lower thresholds and a shorter minimum note length.
+    "dense-pop": {
+        "min_note_len": 0.03,
+        "onset_threshold": 0.4,
+        "frame_threshold": 0.2,
+    },
+    # Alias for dense-pop: same intent, band-oriented wording.
+    "band": {
+        "min_note_len": 0.03,
+        "onset_threshold": 0.4,
+        "frame_threshold": 0.2,
+    },
+    # Vocal lead / melody: focus on a narrow melodic frequency band with a
+    # higher onset threshold to favor confident melodic onsets.
+    "vocal-lead": {
+        "min_note_len": 0.06,
+        "onset_threshold": 0.6,
+        "frame_threshold": 0.3,
+        "min_frequency": 130.0,
+        "max_frequency": 1200.0,
+    },
+}
+
+
+def apply_preset(name: str) -> dict:
+    """Return the transcribe kwargs for a named preset.
+
+    Args:
+        name: A key of :data:`PRESETS` (e.g. ``"solo-piano"``, ``"dense-pop"``,
+            ``"band"``, ``"vocal-lead"``, ``"default"``).
+
+    Returns:
+        A fresh copy of the preset's keyword-argument dict. Modifying the return
+        value does not mutate :data:`PRESETS`.
+
+    Raises:
+        ValueError: If ``name`` is not a known preset. The message lists the
+            valid preset names.
+    """
+    try:
+        return dict(PRESETS[name])
+    except KeyError:
+        valid = ", ".join(sorted(PRESETS))
+        raise ValueError(
+            f"Unknown transcription preset: {name!r}. Valid presets: {valid}."
+        ) from None
+
 
 def _quiet_ml_logs() -> None:
     """Suppress TensorFlow / basic-pitch startup noise before they import.
@@ -84,33 +151,56 @@ def _load_model():
     return Model(ICASSP_2022_MODEL_PATH)
 
 
+# Sentinel marking a threshold kwarg the caller left unset, so a selected
+# ``preset`` can fill it while explicit caller kwargs (any other value) win.
+_UNSET: object = object()
+
+
 def transcribe(
     audio_path: str,
     work_dir: str,
     *,
-    min_note_len: float = 0.05,
-    onset_threshold: float = 0.5,
-    frame_threshold: float = 0.3,
-    min_frequency: float | None = None,
-    max_frequency: float | None = None,
+    preset: str | None = None,
+    min_note_len: float = _UNSET,  # type: ignore[assignment]
+    onset_threshold: float = _UNSET,  # type: ignore[assignment]
+    frame_threshold: float = _UNSET,  # type: ignore[assignment]
+    min_frequency: float | None = _UNSET,  # type: ignore[assignment]
+    max_frequency: float | None = _UNSET,  # type: ignore[assignment]
 ) -> str:
     """Transcribe an audio file to MIDI using basic-pitch.
 
     Runs the basic-pitch note-prediction model on ``audio_path`` and writes the
     resulting MIDI to ``<work_dir>/notes.mid``.
 
+    Thresholds resolve in this order: an explicit caller kwarg wins; otherwise a
+    value from ``preset`` (if given) is used; otherwise the built-in default.
+
+    Named presets (see :data:`PRESETS` / :func:`apply_preset`):
+        * ``"default"``: the built-in defaults (no overrides).
+        * ``"solo-piano"``: cleaner output for solo piano. Higher onset/frame
+          thresholds, moderate ``min_note_len``, and a low bound at A0 to drop
+          sub-piano rumble.
+        * ``"dense-pop"`` / ``"band"``: busy full-band mixes. Lower thresholds
+          and a short ``min_note_len`` to catch more notes.
+        * ``"vocal-lead"``: melody-focused. Narrow frequency band and a higher
+          onset threshold to favor confident melodic onsets.
+
     Args:
         audio_path: Path to the input audio (WAV etc.) to transcribe.
         work_dir: Working directory; the MIDI is written to ``notes.mid`` here.
+        preset: Optional preset name whose thresholds fill any kwargs the caller
+            left unset. Explicit kwargs override the preset. Unknown names raise
+            :class:`ValueError`.
         min_note_len: Minimum note length in *seconds*. Notes shorter than this
-            are dropped by basic-pitch.
+            are dropped by basic-pitch. Default ``0.05``.
         onset_threshold: Note-onset detection threshold (0..1). Higher = fewer,
-            more confident onsets.
-        frame_threshold: Frame (sustain) detection threshold (0..1).
+            more confident onsets. Default ``0.5``.
+        frame_threshold: Frame (sustain) detection threshold (0..1). Default
+            ``0.3``.
         min_frequency: Optional lowest frequency (Hz) to keep. ``None`` = no
-            lower bound.
+            lower bound. Default ``None``.
         max_frequency: Optional highest frequency (Hz) to keep. ``None`` = no
-            upper bound.
+            upper bound. Default ``None``.
 
     Returns:
         The path to the written ``notes.mid`` as a string.
@@ -119,7 +209,36 @@ def transcribe(
         ModuleNotFoundError: If basic-pitch is not installed. The message tells
             the user to run ``uv sync --extra transcribe``.
         FileNotFoundError: If ``audio_path`` does not exist.
+        ValueError: If ``preset`` names an unknown preset.
     """
+    # Resolve thresholds: explicit kwarg > preset value > built-in default.
+    _defaults = {
+        "min_note_len": 0.05,
+        "onset_threshold": 0.5,
+        "frame_threshold": 0.3,
+        "min_frequency": None,
+        "max_frequency": None,
+    }
+    _preset_vals = apply_preset(preset) if preset is not None else {}
+    _given = {
+        "min_note_len": min_note_len,
+        "onset_threshold": onset_threshold,
+        "frame_threshold": frame_threshold,
+        "min_frequency": min_frequency,
+        "max_frequency": max_frequency,
+    }
+    _resolved = {}
+    for _key, _default in _defaults.items():
+        _val = _given[_key]
+        if _val is _UNSET:
+            _val = _preset_vals.get(_key, _default)
+        _resolved[_key] = _val
+    min_note_len = _resolved["min_note_len"]
+    onset_threshold = _resolved["onset_threshold"]
+    frame_threshold = _resolved["frame_threshold"]
+    min_frequency = _resolved["min_frequency"]
+    max_frequency = _resolved["max_frequency"]
+
     audio = Path(audio_path)
     if not audio.exists():
         raise FileNotFoundError(f"Audio file not found: {audio}")
