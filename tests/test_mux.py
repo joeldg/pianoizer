@@ -1,4 +1,5 @@
 import shutil
+import struct
 import subprocess
 
 import pytest
@@ -46,17 +47,48 @@ def test_encode_solid_frames(tmp_path):
             pass
 
 
+def _write_sine_wav(path: str, freq: float, seconds: float, sr: int = 44100) -> None:
+    """Write a mono 16-bit PCM sine WAV using only the stdlib (no soundfile)."""
+    import math
+    import wave
+
+    n = int(seconds * sr)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)  # 16-bit
+        w.setframerate(sr)
+        frames = bytearray()
+        for i in range(n):
+            v = int(0.5 * 32767 * math.sin(2 * math.pi * freq * (i / sr)))
+            frames += struct.pack("<h", v)
+        w.writeframes(bytes(frames))
+
+
+def _read_wav_mono(path: str):
+    """Read a mono 16-bit PCM WAV into a float array in [-1, 1] and its rate."""
+    import wave
+
+    import numpy as np
+
+    with wave.open(path, "rb") as w:
+        sr = w.getframerate()
+        nch = w.getnchannels()
+        raw = w.readframes(w.getnframes())
+    data = np.frombuffer(raw, dtype="<i2").astype("float32") / 32768.0
+    if nch > 1:
+        data = data.reshape(-1, nch).mean(axis=1)
+    return data, sr
+
+
 @pytest.mark.skipif(not _have_ffmpeg(), reason="no ffmpeg available")
 def test_encode_audio_delay_shifts_audio(tmp_path):
     """audio_delay must push the real audio later so it lines up with the
     animation when the video opens with a title card."""
     import numpy as np
-    import soundfile as sf
 
     sr = 44100
-    t = np.linspace(0, 1, sr, endpoint=False)
     ap = str(tmp_path / "a.wav")
-    sf.write(ap, (0.5 * np.sin(2 * np.pi * 440 * t)).astype("float32"), sr)
+    _write_sine_wav(ap, freq=440.0, seconds=1.0, sr=sr)
 
     def frames():
         img = Image.new("RGB", (64, 64), (0, 0, 0))
@@ -73,7 +105,7 @@ def test_encode_audio_delay_shifts_audio(tmp_path):
         [ffmpeg_exe(), "-y", "-i", out, "-vn", "-ac", "1", wav],
         capture_output=True, check=False,
     )
-    data, _ = sf.read(wav)
+    data, _ = _read_wav_mono(wav)
     loud = np.where(np.abs(data) > 0.05)[0]
     assert len(loud) > 0
     start_s = loud[0] / sr

@@ -81,3 +81,38 @@ def note_block(
     if height <= 0:
         return (clipped_top, 0.0)
     return (clipped_top, height)
+
+
+# ---------------------------------------------------------------------------
+# M6 render layout: left/right hand split lanes (issue #32, M6-10).
+#
+# In split mode the falling column for each hand is nudged into its own lane so
+# same-pitch notes from different hands do not overlap while descending. The
+# note still LANDS on its true key; only the falling-lane horizontal placement
+# is offset. Pure math, unit-testable.
+# ---------------------------------------------------------------------------
+def hand_lane_rect(x, width, hand, *, canvas_width, offset_frac=0.5):
+    """Return the falling-lane ``(x, width)`` for a note in split mode.
+
+    The note's true key rect is ``(x, width)``. In split mode the block is
+    shifted horizontally toward its hand's side of the canvas, clamped so it
+    never leaves the canvas. Left-hand notes shift left, right-hand notes shift
+    right; unknown hands are not shifted.
+
+    Args:
+        x: left edge of the note's true key rectangle (px).
+        width: width of the note's key rectangle (px).
+        hand: "L", "R", or None.
+        canvas_width: total canvas width (px).
+        offset_frac: fraction of ``width`` to shift into the lane (0 disables).
+
+    Returns:
+        ``(lane_x, width)`` — same width, shifted x (clamped to the canvas).
+    """
+    if hand not in ("L", "R") or offset_frac <= 0:
+        return (x, width)
+    shift = width * float(offset_frac)
+    lane_x = x - shift if hand == "L" else x + shift
+    # Clamp so the block stays fully on-canvas.
+    lane_x = max(0.0, min(lane_x, canvas_width - width))
+    return (lane_x, width)

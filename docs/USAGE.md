@@ -64,6 +64,11 @@ Positional: `midi` — path to a `.mid` file.
 * `--hands` — colorize notes by estimated hand (left = red, right = green).
 * `--key-tempo` — show the estimated key + tempo on the title card.
 * `--no-clean` — skip MIDI post-processing (keep the raw notes).
+* `--fingering` — draw suggested finger numbers (1-5) on each note block.
+* `--particles` — emit a short particle burst when a note lands
+  (tune with `--particle-intensity` in `[0, 1]`, default `0.6`).
+* `--hand-split` — route left/right-hand notes into separate falling lanes so
+  same-pitch notes from different hands do not overlap while descending.
 
 ### Render-only flags
 

@@ -29,6 +29,11 @@ class RenderConfig(BaseModel):
     trail_length: float = 0.0           # seconds of trail behind a note
     keypress_flash: bool = False        # brief flash on a key when a note lands
     flash_ripple: bool = False          # expanding ripple outlines at onset
+    # M6 learning + layout (issues #30/#31/#32).
+    fingering: bool = False             # draw suggested finger numbers on notes
+    particles: bool = False            # particle burst when a note lands
+    particle_intensity: float = 0.6    # peak particle alpha/count in [0,1]
+    hand_split: bool = False           # split falling notes into L/R lanes
 
 
 class Config(BaseModel):

@@ -67,13 +67,10 @@ def _run_demucs(audio_path: str, wanted: list[str]):
     if not audio.exists():
         raise FileNotFoundError(f"Audio file not found: {audio}")
 
-    # demucs reads audio via ffprobe/ffmpeg; imageio-ffmpeg does not bundle
-    # ffprobe, so fail early with an actionable message on a missing ffprobe
-    # rather than a cryptic "[Errno 2] ... 'ffprobe'" from demucs.
-    if ffprobe_exe() is None:
-        raise RuntimeError(FFPROBE_MISSING_MSG)
-
-    # Lazy, guarded import: keep torch/demucs out of module import time.
+    # Lazy, guarded import: keep torch/demucs out of module import time. Check
+    # this before the ffprobe guard so a missing separation extra (the more
+    # fundamental problem) yields the "install demucs" message rather than an
+    # ffprobe error the user cannot act on without demucs anyway.
     try:
         import torch
         from demucs.apply import apply_model
@@ -81,6 +78,12 @@ def _run_demucs(audio_path: str, wanted: list[str]):
         from demucs.pretrained import get_model
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(_MISSING_DEP_MSG) from exc
+
+    # demucs reads audio via ffprobe/ffmpeg; imageio-ffmpeg does not bundle
+    # ffprobe, so fail early with an actionable message on a missing ffprobe
+    # rather than a cryptic "[Errno 2] ... 'ffprobe'" from demucs.
+    if ffprobe_exe() is None:
+        raise RuntimeError(FFPROBE_MISSING_MSG)
 
     model = get_model(name="htdemucs")
     model.eval()

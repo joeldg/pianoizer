@@ -89,6 +89,9 @@
           <label><input id="trail" type="checkbox" /> Note trail</label>
           <label><input id="keypress_flash" type="checkbox" /> Keypress flash</label>
           <label><input id="flash_ripple" type="checkbox" /> Flash ripple</label>
+          <label><input id="fingering" type="checkbox" /> Fingering numbers</label>
+          <label><input id="particles" type="checkbox" /> Particle burst</label>
+          <label><input id="hand_split" type="checkbox" /> Hand split lanes</label>
         </div>
         <div class="row">
           <label class="field small">
@@ -98,6 +101,10 @@
           <label class="field small">
             <span>Trail length (s)</span>
             <input id="trail_length" type="number" min="0" max="5" step="0.1" value="0" />
+          </label>
+          <label class="field small">
+            <span>Particle intensity: <output id="particle_out">0.6</output></span>
+            <input id="particle_intensity" type="range" min="0" max="1" step="0.05" value="0.6" />
           </label>
         </div>
       </details>

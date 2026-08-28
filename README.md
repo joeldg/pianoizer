@@ -121,6 +121,10 @@ system install is required for rendering.
     #   --hands               color notes by estimated hand (left=red, right=green)
     #   --key-tempo           show estimated key + tempo on the title card
     #   --no-clean            skip MIDI post-processing (keep raw transcription)
+    #   --fingering           draw suggested finger numbers (1-5) on notes
+    #   --particles           particle burst when a note lands
+    #   --particle-intensity  particle peak alpha/count in [0,1] (default 0.6)
+    #   --hand-split          split falling notes into left/right lanes
     # (plus the render flags above: --keys/--fps/--lead-time/--title/...)
 
 ## Transcription quality

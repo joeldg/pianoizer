@@ -365,3 +365,111 @@ def note_trail(img_or_draw, box, color, *, length_px, fade=0.5):
         base.paste(region.convert("RGB"), (0, 0))
     else:
         base.alpha_composite(layer)
+
+
+# ---------------------------------------------------------------------------
+# M6 render polish: particle burst on note landing (issue #31, M6-9).
+#
+# When a note lands on a key, spawn a short-lived burst of small particles that
+# fan upward from the key top and fade out. Deterministic: each particle's
+# offset/velocity is derived from a seed (note pitch + onset) so re-renders are
+# byte-for-byte stable. Default OFF; the plain path is unchanged.
+# ---------------------------------------------------------------------------
+import math as _math
+
+
+def _particle_specs(seed: int, count: int):
+    """Return a deterministic list of ``(angle, speed, size)`` per particle.
+
+    Uses a tiny LCG seeded by ``seed`` so no global RNG state is touched and
+    output is reproducible across renders and processes.
+    """
+    specs = []
+    state = (seed * 2654435761) & 0xFFFFFFFF
+    def _rnd():
+        nonlocal state
+        state = (1103515245 * state + 12345) & 0x7FFFFFFF
+        return state / 0x7FFFFFFF
+    for _ in range(count):
+        # Fan upward: angles clustered around straight up (-90 deg).
+        angle = -_math.pi / 2 + (_rnd() - 0.5) * (_math.pi * 0.9)
+        speed = 0.5 + _rnd() * 0.9
+        size = 1.0 + _rnd() * 2.0
+        specs.append((angle, speed, size))
+    return specs
+
+
+def particle_burst(img_or_draw, origin_xy, color, *, age, lifetime,
+                   count=10, intensity=0.6, seed=0):
+    """Draw a fading particle burst rising from ``origin_xy``.
+
+    Args:
+        img_or_draw: target RGB ``Image`` (or an ``ImageDraw`` wrapping one).
+        origin_xy: ``(x, y)`` spawn point (key top center).
+        color: RGB tuple for the particles.
+        age: seconds since the note landed.
+        lifetime: total burst duration in seconds.
+        count: base particle count (scaled by ``intensity``).
+        intensity: peak alpha/count scale in ``[0, 1]``.
+        seed: integer seed for deterministic offsets.
+    """
+    lifetime = float(lifetime)
+    if lifetime <= 0:
+        return
+    p = float(age) / lifetime
+    if p < 0.0 or p >= 1.0:
+        return
+    intensity = max(0.0, min(1.0, float(intensity)))
+    if intensity <= 0.0:
+        return
+    n = max(1, round(count * (0.4 + 0.6 * intensity)))
+    base = _as_image(img_or_draw)
+    ox, oy = float(origin_xy[0]), float(origin_xy[1])
+    color = (int(color[0]), int(color[1]), int(color[2]))
+    # Particles travel a distance proportional to their speed over the lifetime.
+    spread = 42.0  # max pixel travel at speed 1.0
+    layer = Image.new("RGBA", (base.width, base.height), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    alpha = round(255 * intensity * (1.0 - p))
+    if alpha <= 0:
+        return
+    for angle, speed, size in _particle_specs(int(seed), n):
+        dist = spread * speed * p
+        px = ox + _math.cos(angle) * dist
+        py = oy + _math.sin(angle) * dist  # sin is negative for upward angles
+        r = max(0.5, size * (1.0 - 0.5 * p))
+        ld.ellipse([px - r, py - r, px + r, py + r],
+                   fill=(color[0], color[1], color[2], alpha))
+    region = base.convert("RGBA")
+    region.alpha_composite(layer)
+    base.paste(region.convert("RGB"), (0, 0))
+
+
+# ---------------------------------------------------------------------------
+# M6 learning: fingering number drawn on a note block (issue #30, M6-8).
+# ---------------------------------------------------------------------------
+def fingering_label(draw, box, finger, *, color=None, min_w=8, min_h=12):
+    """Draw a finger number (1-5) centered on a note block, if it fits.
+
+    Small blocks are skipped so the number never overflows. Uses the theme
+    LABEL color by default.
+
+    Args:
+        draw: an ``ImageDraw`` for the frame.
+        box: ``(x0, y0, x1, y1)`` of the note rectangle.
+        finger: finger number 1-5.
+        color: text RGB; defaults to the active theme LABEL.
+        min_w / min_h: minimum block size (px) required to draw the number.
+    """
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    if w < min_w or h < min_h:
+        return
+    text = str(int(finger))
+    size = max(7, int(min(w * 0.9, h * 0.55)))
+    font = load_font(size, bold=True)
+    tw, th = text_size(draw, text, font)
+    cx = x0 + w / 2 - tw / 2
+    cy = y0 + h / 2 - th / 2
+    fill = color if color is not None else globals().get("LABEL", (20, 20, 20))
+    draw.text((cx, cy), text, fill=fill, font=font)

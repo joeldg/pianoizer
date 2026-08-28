@@ -447,6 +447,11 @@ form.addEventListener("submit", async (ev) => {
       trail_length: parseFloat($("trail_length").value) || 0,
       keypress_flash: $("keypress_flash").checked,
       flash_ripple: $("flash_ripple").checked,
+      // M6 learning + layout.
+      fingering: $("fingering").checked,
+      particles: $("particles").checked,
+      particle_intensity: parseFloat($("particle_intensity").value),
+      hand_split: $("hand_split").checked,
     };
     const res = await fetch("/api/jobs", {
       method: "POST",
@@ -481,8 +486,11 @@ function syncRangeOutputs() {
   const gi = document.getElementById("glow_intensity");
   const go = document.getElementById("glow_out");
   if (gi && go) go.textContent = (parseFloat(gi.value) || 0).toFixed(2);
+  const pi = document.getElementById("particle_intensity");
+  const po = document.getElementById("particle_out");
+  if (pi && po) po.textContent = (parseFloat(pi.value) || 0).toFixed(2);
 }
-["snap_timing", "glow_intensity"].forEach((id) => {
+["snap_timing", "glow_intensity", "particle_intensity"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("input", syncRangeOutputs);
 });
