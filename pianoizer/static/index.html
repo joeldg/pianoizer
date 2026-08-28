@@ -47,6 +47,61 @@
         <label><input id="separate" type="checkbox" /> Separate stems</label>
       </div>
 
+      <details class="opts">
+        <summary>Transcription quality</summary>
+        <div class="row">
+          <label class="field small">
+            <span>Preset</span>
+            <select id="transcribe_preset">
+              <option value="default">Default</option>
+              <option value="solo-piano">Solo piano</option>
+              <option value="dense-pop">Dense / pop</option>
+              <option value="band">Band</option>
+              <option value="vocal-lead">Vocal lead</option>
+            </select>
+          </label>
+          <label class="field small">
+            <span>Beat-snap strength: <output id="snap_out">0</output></span>
+            <input id="snap_timing" type="range" min="0" max="1" step="0.05" value="0" />
+          </label>
+        </div>
+        <p class="hint">Separate stems (above) transcribes each part and merges
+          them &mdash; cleaner on dense mixes. Beat-snap pulls note timing toward
+          a grid to reduce drift (0 = off).</p>
+      </details>
+
+      <details class="opts">
+        <summary>Visuals</summary>
+        <div class="row">
+          <label class="field small">
+            <span>Theme</span>
+            <select id="theme">
+              <option value="classic">Classic</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="neon">Neon</option>
+              <option value="synthesia">Synthesia</option>
+            </select>
+          </label>
+        </div>
+        <div class="row checks">
+          <label><input id="glow" type="checkbox" /> Note glow</label>
+          <label><input id="trail" type="checkbox" /> Note trail</label>
+          <label><input id="keypress_flash" type="checkbox" /> Keypress flash</label>
+          <label><input id="flash_ripple" type="checkbox" /> Flash ripple</label>
+        </div>
+        <div class="row">
+          <label class="field small">
+            <span>Glow intensity: <output id="glow_out">0.6</output></span>
+            <input id="glow_intensity" type="range" min="0" max="1" step="0.05" value="0.6" />
+          </label>
+          <label class="field small">
+            <span>Trail length (s)</span>
+            <input id="trail_length" type="number" min="0" max="5" step="0.1" value="0" />
+          </label>
+        </div>
+      </details>
+
       <button id="start" type="submit">Start</button>
       <span id="err" class="err" role="alert" aria-live="assertive"></span>
     </form>

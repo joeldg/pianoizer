@@ -37,6 +37,40 @@ input[type="text"], input[type="number"] {
   font-size: 14px;
   width: 100%;
 }
+
+select {
+  background: #0f1119;
+  border: 1px solid #2a3048;
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 14px;
+  width: 100%;
+}
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.opts {
+  border: 1px solid #2a3048;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  background: #0f1119;
+}
+.opts > summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--fg);
+  padding: 6px 0;
+  list-style: revert;
+}
+.opts[open] > summary { margin-bottom: 6px; }
+.hint {
+  font-size: 12px;
+  color: var(--muted, #8a90a6);
+  margin: 2px 0 6px;
+}
 .row { display: flex; gap: 16px; flex-wrap: wrap; }
 .row.checks { margin: 4px 0 14px; }
 .row.checks label { color: var(--fg); font-size: 14px; }

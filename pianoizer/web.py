@@ -61,6 +61,31 @@ def _config_from_options(options: dict[str, Any]) -> RenderConfig:
         fields["show_key_tempo"] = bool(key_tempo)
     if options.get("title") is not None:
         fields["title"] = str(options["title"])
+
+    # --- M6 options -----------------------------------------------------
+    # Transcription quality.
+    if options.get("transcribe_preset"):
+        fields["transcribe_preset"] = str(options["transcribe_preset"])
+    if options.get("snap_timing") is not None:
+        # Clamp to [0, 1]; 0 disables.
+        fields["snap_timing"] = max(0.0, min(1.0, float(options["snap_timing"])))
+    if options.get("snap_subdivision") is not None:
+        fields["snap_subdivision"] = max(1, int(options["snap_subdivision"]))
+    # Visual polish.
+    if options.get("theme"):
+        fields["theme"] = str(options["theme"])
+    if options.get("glow") is not None:
+        fields["glow"] = bool(options["glow"])
+    if options.get("glow_intensity") is not None:
+        fields["glow_intensity"] = max(0.0, min(1.0, float(options["glow_intensity"])))
+    if options.get("trail") is not None:
+        fields["trail"] = bool(options["trail"])
+    if options.get("trail_length") is not None:
+        fields["trail_length"] = max(0.0, float(options["trail_length"]))
+    if options.get("keypress_flash") is not None:
+        fields["keypress_flash"] = bool(options["keypress_flash"])
+    if options.get("flash_ripple") is not None:
+        fields["flash_ripple"] = bool(options["flash_ripple"])
     return RenderConfig(**fields)
 
 
@@ -124,6 +149,25 @@ def create_app(manager: JobManager | None = None) -> FastAPI:
         if not source or not str(source).strip():
             raise HTTPException(status_code=422, detail="'source' is required")
         source = str(source).strip()
+
+        # Validate enum-like options up front so a bad value fails fast (422)
+        # instead of erroring mid-render.
+        preset = body.get("transcribe_preset")
+        if preset:
+            from .stages.transcribe import PRESETS
+            if str(preset) not in PRESETS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"unknown transcribe_preset {preset!r}; "
+                           f"valid: {sorted(PRESETS)}",
+                )
+        theme = body.get("theme")
+        if theme:
+            from . import drawing
+            try:
+                drawing.get_theme(str(theme))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         config = _config_from_options(body)
         out_path = str(output_dir / f"{_safe_stem(source)}.mp4")

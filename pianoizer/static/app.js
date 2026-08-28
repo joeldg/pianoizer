@@ -429,12 +429,24 @@ form.addEventListener("submit", async (ev) => {
     if (!source) {
       throw new Error("Enter a URL/path or choose a file.");
     }
+    const $ = (id) => document.getElementById(id);
     const body = {
       source: source,
-      fps: parseInt(document.getElementById("fps").value, 10) || 30,
-      hands: document.getElementById("hands").checked,
-      key_tempo: document.getElementById("key_tempo").checked,
-      separate: document.getElementById("separate").checked,
+      fps: parseInt($("fps").value, 10) || 30,
+      hands: $("hands").checked,
+      key_tempo: $("key_tempo").checked,
+      separate: $("separate").checked,
+      // M6 transcription quality.
+      transcribe_preset: $("transcribe_preset").value,
+      snap_timing: parseFloat($("snap_timing").value) || 0,
+      // M6 visuals.
+      theme: $("theme").value,
+      glow: $("glow").checked,
+      glow_intensity: parseFloat($("glow_intensity").value),
+      trail: $("trail").checked,
+      trail_length: parseFloat($("trail_length").value) || 0,
+      keypress_flash: $("keypress_flash").checked,
+      flash_ripple: $("flash_ripple").checked,
     };
     const res = await fetch("/api/jobs", {
       method: "POST",
@@ -450,6 +462,7 @@ form.addEventListener("submit", async (ev) => {
     ensurePolling();
     form.reset();
     document.getElementById("fps").value = 30;
+    syncRangeOutputs();
     uploadedSource = null;
     filenameEl.textContent = "";
   } catch (e) {
@@ -459,6 +472,21 @@ form.addEventListener("submit", async (ev) => {
     startBtn.textContent = origLabel;
   }
 });
+
+// Keep the range sliders' numeric read-outs in sync with their values.
+function syncRangeOutputs() {
+  const st = document.getElementById("snap_timing");
+  const so = document.getElementById("snap_out");
+  if (st && so) so.textContent = (parseFloat(st.value) || 0).toFixed(2);
+  const gi = document.getElementById("glow_intensity");
+  const go = document.getElementById("glow_out");
+  if (gi && go) go.textContent = (parseFloat(gi.value) || 0).toFixed(2);
+}
+["snap_timing", "glow_intensity"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", syncRangeOutputs);
+});
+syncRangeOutputs();
 
 updateEmptyState();
 let pollTimer = null;

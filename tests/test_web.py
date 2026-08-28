@@ -262,3 +262,69 @@ def test_upload_then_use_as_source(client, tmp_path):
 
     job = client.post("/api/jobs", json={"source": source}).json()
     _wait_for_status(client, job["id"], "done")
+
+
+def test_index_exposes_m6_options(client):
+    """The form surfaces the new M6 knobs (preset, theme, glow, etc.)."""
+    html = client.get("/").text
+    for control_id in (
+        "transcribe_preset", "snap_timing", "theme", "glow", "glow_intensity",
+        "trail", "trail_length", "keypress_flash", "flash_ripple",
+    ):
+        assert f'id="{control_id}"' in html, control_id
+
+
+def test_m6_options_flow_to_config(monkeypatch):
+    """Options posted by the UI reach RenderConfig on the submitted job."""
+    captured = {}
+
+    def _capture(source, out_path, config, *, work_dir, on_stage=None, **kwargs):
+        captured["config"] = config
+        captured["kwargs"] = kwargs
+        return _fake_pipeline(source, out_path, config,
+                              work_dir=work_dir, on_stage=on_stage, **kwargs)
+
+    monkeypatch.setattr(jobs_mod, "run_pipeline", _capture)
+    manager = JobManager(max_workers=1)
+    with TestClient(create_app(manager)) as c:
+        body = {
+            "source": "http://x/watch?v=abc123",
+            "separate": True,
+            "transcribe_preset": "dense-pop",
+            "snap_timing": 0.5,
+            "snap_subdivision": 2,
+            "theme": "neon",
+            "glow": True,
+            "glow_intensity": 0.8,
+            "trail": True,
+            "trail_length": 0.4,
+            "keypress_flash": True,
+            "flash_ripple": True,
+        }
+        resp = c.post("/api/jobs", json=body)
+        assert resp.status_code == 202
+        job_id = resp.json()["id"]
+        _wait_for_status(c, job_id, "done")
+    manager.shutdown(wait=True)
+
+    cfg = captured["config"]
+    assert cfg.transcribe_preset == "dense-pop"
+    assert cfg.snap_timing == 0.5
+    assert cfg.snap_subdivision == 2
+    assert cfg.theme == "neon"
+    assert cfg.glow is True and cfg.glow_intensity == 0.8
+    assert cfg.trail is True and cfg.trail_length == 0.4
+    assert cfg.keypress_flash is True and cfg.flash_ripple is True
+    assert captured["kwargs"].get("separate") is True
+
+
+def test_unknown_theme_returns_422(client):
+    resp = client.post("/api/jobs", json={"source": "http://x/watch?v=abc123",
+                                          "theme": "bogus"})
+    assert resp.status_code == 422
+
+
+def test_unknown_preset_returns_422(client):
+    resp = client.post("/api/jobs", json={"source": "http://x/watch?v=abc123",
+                                          "transcribe_preset": "bogus"})
+    assert resp.status_code == 422
