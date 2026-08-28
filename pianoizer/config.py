@@ -27,6 +27,8 @@ class RenderConfig(BaseModel):
     glow_intensity: float = 0.6         # peak halo alpha in [0,1]
     trail: bool = False                 # fading tail behind moving notes
     trail_length: float = 0.0           # seconds of trail behind a note
+    keypress_flash: bool = False        # brief flash on a key when a note lands
+    flash_ripple: bool = False          # expanding ripple outlines at onset
 
 
 class Config(BaseModel):

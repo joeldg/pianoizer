@@ -41,6 +41,8 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         glow_intensity=getattr(args, "glow_intensity", 0.6),
         trail=getattr(args, "trail", False),
         trail_length=getattr(args, "trail_length", 0.0),
+        keypress_flash=getattr(args, "keypress_flash", False),
+        flash_ripple=getattr(args, "flash_ripple", False),
     )
 
 
@@ -78,6 +80,10 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--trail", action="store_true", help="Fading tail behind notes")
     parser.add_argument("--trail-length", type=float, default=0.0,
                         help="Trail length in seconds (default 0)")
+    parser.add_argument("--keypress-flash", action="store_true",
+                        help="Flash a key when a note lands")
+    parser.add_argument("--flash-ripple", action="store_true",
+                        help="Expanding ripple outlines at note onset")
 
 
 # --------------------------------------------------------------------------
