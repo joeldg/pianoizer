@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..util import FFPROBE_MISSING_MSG, ffprobe_exe
+
 #: Filename written into the work directory for the isolated stem.
 STEM_NAME = "stem.wav"
 
@@ -56,11 +58,17 @@ def separate(audio_path: str, work_dir: str, stem: str = "other") -> str:
     work.mkdir(parents=True, exist_ok=True)
     out_path = work / STEM_NAME
 
+    # demucs reads audio via ffprobe/ffmpeg; imageio-ffmpeg does not bundle
+    # ffprobe, so fail early with an actionable message on a missing ffprobe
+    # rather than a cryptic "[Errno 2] ... 'ffprobe'" from demucs.
+    if ffprobe_exe() is None:
+        raise RuntimeError(FFPROBE_MISSING_MSG)
+
     # Lazy, guarded import: keep torch/demucs out of module import time.
     try:
         import torch
         from demucs.apply import apply_model
-        from demucs.audio import AudioFile, convert_audio, save_audio
+        from demucs.audio import AudioFile, convert_audio
         from demucs.pretrained import get_model
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(_MISSING_DEP_MSG) from exc
@@ -73,10 +81,15 @@ def separate(audio_path: str, work_dir: str, stem: str = "other") -> str:
         raise ValueError(f"Unknown stem {stem!r}; model sources are {sources}.")
 
     # Read the mix at the model's native sample rate / channel count.
+    # AudioFile.read returns a (1, channels, length) tensor (leading batch dim),
+    # so squeeze it to (channels, length) before normalizing and re-add the
+    # batch dim for apply_model.
     wav = AudioFile(str(audio)).read(
         samplerate=model.samplerate,
         channels=model.audio_channels,
     )
+    if wav.dim() == 3:
+        wav = wav[0]
     ref = wav.mean(0)
     wav = (wav - ref.mean()) / (ref.std() + 1e-8)
 
@@ -91,7 +104,13 @@ def separate(audio_path: str, work_dir: str, stem: str = "other") -> str:
     # Resample the chosen stem to our canonical 44.1kHz output rate.
     chosen = convert_audio(chosen, model.samplerate, SAMPLE_RATE, chosen.shape[0])
 
-    # Overwrite-safe: save_audio truncates/replaces the target file.
-    save_audio(chosen, str(out_path), samplerate=SAMPLE_RATE)
+    # Write the stem with soundfile rather than demucs.save_audio: newer
+    # torchaudio routes save() through torchcodec, which is a separate optional
+    # dependency that may be absent. soundfile writes a plain WAV directly.
+    # soundfile wants (frames, channels); chosen is (channels, frames).
+    import soundfile as sf
+
+    data = chosen.detach().cpu().numpy().T
+    sf.write(str(out_path), data, SAMPLE_RATE, subtype="PCM_16")
 
     return str(out_path)

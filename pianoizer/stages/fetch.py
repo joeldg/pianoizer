@@ -16,7 +16,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..util import ffmpeg_exe
+from ..util import FFPROBE_MISSING_MSG, ffmpeg_exe, ffprobe_exe
 
 #: Sample rate of the extracted WAV, per DESIGN.md 3.2.
 SAMPLE_RATE = 44100
@@ -81,11 +81,28 @@ def _fetch_local(src: Path, work_dir: Path) -> FetchResult:
 def _fetch_remote(url: str, work_dir: Path) -> FetchResult:
     import yt_dlp
 
+    # yt-dlp's audio-extraction postprocessor shells out to ffprobe, which
+    # imageio-ffmpeg does not bundle. Fail early with an actionable message
+    # rather than a cryptic "[Errno 2] ... 'ffprobe'" from the child process.
+    probe = ffprobe_exe()
+    if probe is None:
+        raise RuntimeError(FFPROBE_MISSING_MSG)
+
+    # Point yt-dlp at the directory that holds a real ffmpeg *and* ffprobe when
+    # one exists (a system install), so its postprocessor can find both.
+    ffmpeg_path = ffmpeg_exe()
+    ffmpeg_location = os.path.dirname(probe)
+    if not os.path.isfile(os.path.join(ffmpeg_location, "ffmpeg")):
+        # ffprobe and ffmpeg live in different places (e.g. bundled ffmpeg +
+        # system ffprobe): hand yt-dlp the ffmpeg binary path directly and let
+        # it resolve ffprobe from PATH.
+        ffmpeg_location = ffmpeg_path
+
     audio_stem = work_dir / "audio"
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": str(audio_stem) + ".%(ext)s",
-        "ffmpeg_location": ffmpeg_exe(),
+        "ffmpeg_location": ffmpeg_location,
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
