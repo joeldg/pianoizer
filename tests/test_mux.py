@@ -110,3 +110,68 @@ def test_encode_audio_delay_shifts_audio(tmp_path):
     assert len(loud) > 0
     start_s = loud[0] / sr
     assert 2.7 < start_s < 3.3, f"audio started at {start_s:.2f}s, expected ~3s"
+
+
+def test_hw_encode_uses_videotoolbox_command(monkeypatch, tmp_path):
+    """--hw-encode must build an h264_videotoolbox, bitrate-controlled command
+    (no CRF/preset), without requiring the HW encoder to be present."""
+    from pianoizer.stages import mux
+
+    captured = {}
+
+    class _FakeProc:
+        def __init__(self, cmd, **kw):
+            captured["cmd"] = cmd
+
+            class _Stdin:
+                def write(self, *_a, **_k):
+                    pass
+
+                def close(self):
+                    pass
+
+            class _Stderr:
+                def read(self):
+                    return b""
+
+            self.stdin = _Stdin()
+            self.stderr = _Stderr()
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(mux.subprocess, "Popen", _FakeProc)
+
+    frames = [Image.new("RGB", (1920, 1080), (0, 0, 0))]
+    mux.encode(iter(frames), str(tmp_path / "o.mp4"),
+               width=1920, height=1080, fps=30, hw_encode=True)
+    cmd = captured["cmd"]
+    assert "h264_videotoolbox" in cmd
+    assert "libx264" not in cmd
+    assert "-b:v" in cmd
+    assert "-crf" not in cmd
+    # default bitrate for 1080p ~ 8M
+    assert cmd[cmd.index("-b:v") + 1] == "8.0M"
+
+
+def test_hw_encode_honors_explicit_bitrate(monkeypatch, tmp_path):
+    from pianoizer.stages import mux
+
+    captured = {}
+
+    class _FakeProc:
+        def __init__(self, cmd, **kw):
+            captured["cmd"] = cmd
+            self.stdin = type("S", (), {"write": lambda *a, **k: None,
+                                        "close": lambda *a, **k: None})()
+            self.stderr = type("E", (), {"read": lambda *a, **k: b""})()
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(mux.subprocess, "Popen", _FakeProc)
+    frames = [Image.new("RGB", (640, 360), (0, 0, 0))]
+    mux.encode(iter(frames), str(tmp_path / "o.mp4"),
+               width=640, height=360, fps=30, hw_encode=True, bitrate="3M")
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("-b:v") + 1] == "3M"

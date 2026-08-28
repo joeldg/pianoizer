@@ -14,6 +14,19 @@ from PIL import Image
 from ..util import ffmpeg_exe
 
 
+def _default_bitrate(width: int, height: int) -> str:
+    """A reasonable default H.264 bitrate for a given resolution (HW encode).
+
+    Scales linearly with pixel count relative to 1080p ~ 8 Mbps, clamped to a
+    sane range so tiny test renders and 4K both get usable values.
+    """
+    px = max(1, width * height)
+    ref = 1920 * 1080
+    mbps = 8.0 * (px / ref)
+    mbps = max(1.0, min(mbps, 40.0))
+    return f"{mbps:.1f}M"
+
+
 def encode(
     frames: Iterable[Image.Image],
     out_path: str,
@@ -25,9 +38,19 @@ def encode(
     audio_delay: float = 0.0,
     crf: int = 20,
     preset: str = "medium",
+    hw_encode: bool = False,
+    bitrate: str | None = None,
     on_frame: Callable[[], None] | None = None,
 ) -> str:
     """Encode ``frames`` to an H.264 mp4 at ``out_path``. Returns ``out_path``.
+
+    ``hw_encode`` selects Apple's hardware H.264 encoder (``h264_videotoolbox``)
+    on Apple silicon, which offloads encoding to the media engine and is much
+    faster than software ``libx264``. VideoToolbox is rate-controlled by
+    bitrate rather than CRF, so ``bitrate`` (e.g. ``"8M"``) is used when set,
+    otherwise a resolution-scaled default is chosen. The software ``libx264``
+    path (``crf``/``preset``) remains the default so byte-reproducible golden
+    renders are unaffected.
 
     ``audio_delay`` shifts the real audio later by that many seconds so it
     lines up with the animation when the video starts with a title card. The
@@ -61,11 +84,21 @@ def encode(
         cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-c:a", "aac"]
     # The video stream is now the shortest; -shortest bounds output to it.
     cmd += ["-shortest"]
-    cmd += [
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-preset", preset, "-crf", str(crf),
-        out_path,
-    ]
+    if hw_encode:
+        # Apple VideoToolbox HW encoder: bitrate-controlled, not CRF. Pick a
+        # resolution-scaled default when no explicit bitrate is given.
+        vb = bitrate or _default_bitrate(width, height)
+        cmd += [
+            "-c:v", "h264_videotoolbox", "-pix_fmt", "yuv420p",
+            "-b:v", vb,
+            out_path,
+        ]
+    else:
+        cmd += [
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-preset", preset, "-crf", str(crf),
+            out_path,
+        ]
 
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     assert proc.stdin is not None

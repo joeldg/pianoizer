@@ -236,6 +236,8 @@ def run_pipeline(
                 width=config.width, height=config.height, fps=config.fps,
                 audio_path=str(audio_path) if audio_path.exists() else None,
                 audio_delay=audio_delay,
+                hw_encode=getattr(config, "hw_encode", False),
+                bitrate=getattr(config, "encode_bitrate", None),
                 on_frame=on_frame,
             )
         finally:

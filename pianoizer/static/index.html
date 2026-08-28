@@ -109,6 +109,22 @@
         </div>
       </details>
 
+      <details class="opts">
+        <summary>Performance</summary>
+        <div class="row checks">
+          <label>
+            <input id="hw_encode" type="checkbox" />
+            HW encode (Apple VideoToolbox)
+          </label>
+        </div>
+        <div class="row">
+          <label class="field small">
+            <span>Encode bitrate (HW only)</span>
+            <input id="encode_bitrate" type="text" placeholder="auto (e.g. 8M)" />
+          </label>
+        </div>
+      </details>
+
       <button id="start" type="submit">Start</button>
       <span id="err" class="err" role="alert" aria-live="assertive"></span>
     </form>

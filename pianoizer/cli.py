@@ -47,6 +47,8 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         particles=getattr(args, "particles", False),
         particle_intensity=getattr(args, "particle_intensity", 0.6),
         hand_split=getattr(args, "hand_split", False),
+        hw_encode=getattr(args, "hw_encode", False),
+        encode_bitrate=getattr(args, "encode_bitrate", None),
     )
 
 
@@ -96,6 +98,13 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
                         help="Split falling notes into left/right lanes")
     parser.add_argument("--flash-ripple", action="store_true",
                         help="Expanding ripple outlines at note onset")
+    parser.add_argument("--hw-encode", action="store_true",
+                        help="Use Apple VideoToolbox HW H.264 encoder "
+                             "(faster on Apple silicon; bitrate-controlled)")
+    parser.add_argument("--encode-bitrate", type=str, default=None,
+                        metavar="RATE",
+                        help="Target video bitrate for --hw-encode, e.g. 8M "
+                             "(default: resolution-scaled)")
 
 
 # --------------------------------------------------------------------------
@@ -156,6 +165,7 @@ def _render_cmd(argv: list[str]) -> int:
         frames, args.out,
         width=cfg.width, height=cfg.height, fps=cfg.fps,
         audio_path=args.audio,
+        hw_encode=cfg.hw_encode, bitrate=cfg.encode_bitrate,
     )
     print(f"Wrote {args.out}")
     return 0

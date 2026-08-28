@@ -77,6 +77,25 @@ Positional: `midi` — path to a `.mid` file.
 * `--no-title` — skip the title card.
 * `--audio FILE` — mux an audio track instead of silence.
 
+### Performance flags
+
+* `--hw-encode` — use Apple's hardware H.264 encoder (`h264_videotoolbox`) on
+  Apple silicon. Much faster than software `libx264` because it offloads to the
+  media engine. VideoToolbox is bitrate-controlled, so it ignores CRF and uses
+  a resolution-scaled default bitrate. Off by default (the software path stays
+  byte-reproducible for tests).
+* `--encode-bitrate RATE` — target video bitrate for `--hw-encode`, e.g. `8M`.
+  Defaults to a resolution-scaled value (~8 Mbps at 1080p).
+
+**Source separation on Apple silicon:** demucs (`--separate`) automatically
+uses the Metal (`mps`) GPU backend when available, which is several times faster
+than CPU. Force a device with `PIANOIZER_DEMUCS_DEVICE=cpu` (or `mps`/`cuda`).
+
+**Python version:** the `transcribe` / `all` extras pull in TensorFlow via
+basic-pitch, which only ships wheels for CPython 3.11/3.12. Create the venv with
+`uv venv --python 3.11` (or `uv sync --extra all --python 3.11`) if your default
+`python3` is 3.13+.
+
 ## `pianoizer <source>` — full pipeline
 
 ```

@@ -452,6 +452,9 @@ form.addEventListener("submit", async (ev) => {
       particles: $("particles").checked,
       particle_intensity: parseFloat($("particle_intensity").value),
       hand_split: $("hand_split").checked,
+      // Performance (Apple silicon HW encode).
+      hw_encode: $("hw_encode").checked,
+      encode_bitrate: $("encode_bitrate").value.trim() || null,
     };
     const res = await fetch("/api/jobs", {
       method: "POST",
