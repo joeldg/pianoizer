@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import stages
 from .config import RenderConfig
-from .model import load_midi
+from .model import load_midi, save_midi
 
 # Ordered pipeline stages. postprocess is an identity pass for now (M3 adds real
 # cleanup); the seam is kept so callers can resume from it.
@@ -101,11 +101,12 @@ def run_pipeline(
         meta = json.loads(meta_path.read_text())
 
     # --- Stage 2: separate (optional; M3) --------------------------------
-    if separate and _should_run("separate", work / STEM, from_stage):
-        # Placeholder seam. When implemented, produce work/stem.wav and use it
-        # as the transcription input.
-        pass
-    transcribe_input = work / STEM if (separate and (work / STEM).exists()) else audio_path
+    stem_path = work / STEM
+    if separate and _should_run("separate", stem_path, from_stage):
+        produced = stages.separate.separate(str(audio_path), str(work))
+        if Path(produced) != stem_path:
+            shutil.copyfile(produced, stem_path)
+    transcribe_input = stem_path if (separate and stem_path.exists()) else audio_path
 
     # --- Stage 3: transcribe --------------------------------------------
     if _should_run("transcribe", notes_path, from_stage):
@@ -113,9 +114,16 @@ def run_pipeline(
         if Path(produced) != notes_path:
             shutil.copyfile(produced, notes_path)
 
-    # --- Stage 4: postprocess (identity for now; M3 adds cleanup) --------
+    # --- Stage 4: postprocess (M3: clean MIDI) ---------------------------
+    # Hand assignment is applied at render time (MIDI cannot store it), so the
+    # cached cleaned.mid stays a plain, reusable artifact.
     if _should_run("postprocess", cleaned_path, from_stage):
-        shutil.copyfile(notes_path, cleaned_path)
+        if config.clean:
+            from .stages.postprocess import postprocess
+            notes = postprocess(load_midi(str(notes_path)))
+            save_midi(notes, str(cleaned_path))
+        else:
+            shutil.copyfile(notes_path, cleaned_path)
 
     if midi_only:
         return str(cleaned_path)
@@ -124,12 +132,22 @@ def run_pipeline(
     output_path = work / OUTPUT
     if _should_run("render", output_path, from_stage) or _should_run("mux", output_path, from_stage):
         notes = load_midi(str(cleaned_path))
+        if config.hands:
+            # MIDI does not store hand; re-derive on load so cached resume works.
+            from .hands import assign_hands
+            notes = assign_hands(notes)
         title = config.title or meta.get("title") or Path(source).stem
-        subtitle = ""
+        parts: list[str] = []
         if meta.get("uploader"):
-            subtitle = str(meta["uploader"])
+            parts.append(str(meta["uploader"]))
         if meta.get("webpage_url"):
-            subtitle = (subtitle + "  |  " if subtitle else "") + str(meta["webpage_url"])
+            parts.append(str(meta["webpage_url"]))
+        if config.show_key_tempo:
+            from . import analysis
+            desc = analysis.describe(notes)
+            if desc:
+                parts.append(desc)
+        subtitle = "  |  ".join(parts)
         frames = stages.render.all_frames(notes, config, title=title, subtitle=subtitle)
         stages.mux.encode(
             frames, str(output_path),

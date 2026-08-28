@@ -13,10 +13,11 @@ See **[DESIGN.md](DESIGN.md)** for the full design.
 
 ## Status
 
-M2 complete: full pipeline from a YouTube URL (or local audio/video file) to a
-falling-notes MP4 — download, transcribe to MIDI, render, and mux.
-Transcription is approximate (see limitations below). Next: quality work —
-source separation and MIDI cleanup (M3). See the milestones in DESIGN.md.
+M3 complete: quality features on top of the M2 pipeline — MIDI post-processing
+(drop spurious blips, merge, clamp), optional demucs source separation
+(`--separate`), key/tempo detection (`--key-tempo`), and a two-hand color split
+(`--hands`, left=red / right=green). Transcription is still approximate (see
+limitations below). Next: polish/UX (M4). See the milestones in DESIGN.md.
 
 ## Requirements
 
@@ -56,6 +57,9 @@ system install is required for rendering.
     #   --keep-work           keep the intermediate working directory
     #   --work-dir DIR        set the per-job working directory
     #   --midi-only           stop after producing cleaned.mid (no video)
+    #   --hands               color notes by estimated hand (left=red, right=green)
+    #   --key-tempo           show estimated key + tempo on the title card
+    #   --no-clean            skip MIDI post-processing (keep raw transcription)
     # (plus the render flags above: --keys/--fps/--lead-time/--title/...)
 
 ## Transcription quality

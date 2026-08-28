@@ -84,8 +84,13 @@ class Scene:
                 )
                 if height <= 0:
                     continue
-                fill = d.BLACK_NOTE if is_black else d.WHITE_NOTE
-                edge = d.BLACK_NOTE_EDGE if is_black else d.WHITE_NOTE_EDGE
+                if n.hand == "L":
+                    fill, edge = d.LEFT_NOTE, d.LEFT_NOTE_EDGE
+                elif n.hand == "R":
+                    fill, edge = d.RIGHT_NOTE, d.RIGHT_NOTE_EDGE
+                else:
+                    fill = d.BLACK_NOTE if is_black else d.WHITE_NOTE
+                    edge = d.BLACK_NOTE_EDGE if is_black else d.WHITE_NOTE_EDGE
                 pad = 1.0
                 d.rounded_block(
                     draw,

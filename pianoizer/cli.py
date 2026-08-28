@@ -30,6 +30,9 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         label_black=args.label_black,
         octave_numbers=args.octave_numbers,
         title=args.title,
+        hands=getattr(args, "hands", False),
+        show_key_tempo=getattr(args, "key_tempo", False),
+        clean=getattr(args, "clean", True),
     )
 
 
@@ -43,6 +46,13 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
                         help="Show octave numbers (C4)")
     parser.add_argument("--title", default=None,
                         help="Title-card text (default: song/file name)")
+    parser.add_argument("--hands", action="store_true",
+                        help="Colorize notes by estimated hand (left/right)")
+    parser.add_argument("--key-tempo", dest="key_tempo", action="store_true",
+                        help="Show estimated key and tempo on the title card")
+    parser.add_argument("--no-clean", dest="clean", action="store_false",
+                        help="Skip MIDI post-processing (keep raw transcription)")
+    parser.set_defaults(clean=True)
 
 
 # --------------------------------------------------------------------------
@@ -76,14 +86,25 @@ def _render_cmd(argv: list[str]) -> int:
         print("error: no notes found in MIDI", file=sys.stderr)
         return 3
 
+    if cfg.hands:
+        from .hands import assign_hands
+        notes = assign_hands(notes)
+
     title = args.title if args.title is not None else midi_path.stem
     if args.no_title:
         title = None
 
+    subtitle = args.subtitle or ""
+    if cfg.show_key_tempo:
+        from . import analysis
+        desc = analysis.describe(notes)
+        if desc:
+            subtitle = (subtitle + "  |  " + desc) if subtitle else desc
+
     frames = all_frames(
         notes, cfg,
         title=title,
-        subtitle=args.subtitle or "",
+        subtitle=subtitle,
         title_seconds=args.title_seconds,
     )
     print(f"Rendering {len(notes)} notes -> {args.out} "

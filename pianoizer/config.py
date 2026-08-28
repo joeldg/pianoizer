@@ -12,6 +12,10 @@ class RenderConfig(BaseModel):
     label_black: bool = False
     octave_numbers: bool = False
     title: str | None = None
+    # M3 quality options.
+    hands: bool = False             # colorize notes by estimated hand (L/R)
+    show_key_tempo: bool = False    # append estimated key/tempo to the subtitle
+    clean: bool = True              # run MIDI post-processing before render
 
 
 class Config(BaseModel):

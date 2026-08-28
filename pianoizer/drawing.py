@@ -22,6 +22,11 @@ WHITE_NOTE = (90, 200, 255)
 WHITE_NOTE_EDGE = (200, 240, 255)
 BLACK_NOTE = (255, 170, 90)
 BLACK_NOTE_EDGE = (255, 220, 180)
+# Two-hand note colors (used when a note has ``hand`` set: "L" or "R").
+LEFT_NOTE = (255, 120, 120)          # right-hand-vs-left contrast: warm red = left
+LEFT_NOTE_EDGE = (255, 190, 190)
+RIGHT_NOTE = (110, 210, 140)         # green = right
+RIGHT_NOTE_EDGE = (200, 245, 215)
 LABEL = (90, 90, 100)
 TITLE_FG = (240, 240, 245)
 TITLE_SUB = (150, 150, 160)
