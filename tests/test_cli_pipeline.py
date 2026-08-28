@@ -74,3 +74,27 @@ def test_missing_dep_returns_code_4(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.pipeline, "run_pipeline", boom)
     rc = cli.main(["x.wav", "--out", str(tmp_path / "o.mp4")])
     assert rc == 4
+
+
+def test_config_file_precedence(tmp_path):
+    """CLI flags override config-file values; file fills unset keys."""
+    from pianoizer.cli import _load_file_values, _apply_config_file, build_pipeline_parser
+    cfg_toml = tmp_path / "pianoizer.toml"
+    cfg_toml.write_text("[pianoizer]\nfps = 60\nlead_time = 2.0\nhands = true\n")
+    argv = ["src.wav", "--out", "o.mp4", "--config", str(cfg_toml), "--fps", "30"]
+    parser = build_pipeline_parser()
+    args = parser.parse_args(argv)
+    fv = _load_file_values(args)
+    cfg = _apply_config_file(args, argv, fv)
+    assert cfg.fps == 30          # CLI wins over file
+    assert cfg.lead_time == 2.0   # from file
+    assert cfg.hands is True       # from file
+    assert cfg.width == 1920       # untouched default
+
+
+def test_config_file_unknown_key_errors(tmp_path):
+    from pianoizer import cli
+    cfg_toml = tmp_path / "pianoizer.toml"
+    cfg_toml.write_text("[pianoizer]\nbogus = 1\n")
+    rc = cli._pipeline_cmd(["src.wav", "--out", "o.mp4", "--config", str(cfg_toml)])
+    assert rc == 2

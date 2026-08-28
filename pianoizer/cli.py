@@ -141,7 +141,71 @@ def build_pipeline_parser() -> argparse.ArgumentParser:
     p.add_argument("--work-dir", default=None, help="Explicit working directory")
     p.add_argument("--midi-only", action="store_true",
                    help="Stop after producing cleaned.mid (no video)")
+    p.add_argument("--config", default=None,
+                   help="Path to a pianoizer.toml config file (CLI flags override it)")
+    p.add_argument("--progress", action="store_true",
+                   help="Show stage and frame-encoding progress")
     return p
+
+
+# Config keys that RenderConfig accepts (a subset of configfile.KNOWN_KEYS).
+_RENDER_CONFIG_KEYS = {
+    "width", "height", "fps", "lead_time", "keys", "label_black",
+    "octave_numbers", "title", "hands", "show_key_tempo", "clean",
+}
+
+
+def _explicit_cli_keys(argv: list[str]) -> set[str]:
+    """Return the config keys the user set explicitly on the command line.
+
+    Reparse ``argv`` with all defaults suppressed so only user-supplied options
+    appear in the namespace; map them to config keys.
+    """
+    probe = build_pipeline_parser()
+    for action in probe._actions:
+        action.default = argparse.SUPPRESS
+    ns = probe.parse_args(argv)
+    seen = vars(ns)
+    keys: set[str] = set()
+    for k in _RENDER_CONFIG_KEYS | {"separate"}:
+        # argparse dest for --key-tempo is key_tempo; map back.
+        dest = "key_tempo" if k == "show_key_tempo" else k
+        if dest in seen:
+            keys.add(k)
+    return keys
+
+
+def _load_file_values(args: argparse.Namespace) -> dict:
+    """Load config-file values (explicit --config or auto-discovered), or {}."""
+    from . import configfile
+
+    path = args.config or configfile.find_default_config(".")
+    if not path:
+        return {}
+    values = configfile.load_config_file(path)
+    print(f"Using config file: {path}", file=sys.stderr)
+    return values
+
+
+def _apply_config_file(args: argparse.Namespace, argv: list[str],
+                       file_values: dict) -> RenderConfig:
+    """Build a RenderConfig honoring precedence CLI > config file > defaults.
+
+    Start from built-in RenderConfig defaults, overlay file values, then
+    overlay the CLI flags the user set explicitly.
+    """
+    explicit = _explicit_cli_keys(argv)
+    values: dict = {}
+    # file layer
+    for k, v in file_values.items():
+        if k in _RENDER_CONFIG_KEYS:
+            values[k] = v
+    # explicit CLI layer (wins)
+    for k in _RENDER_CONFIG_KEYS:
+        if k in explicit:
+            dest = "key_tempo" if k == "show_key_tempo" else k
+            values[k] = getattr(args, dest)
+    return RenderConfig(**values)
 
 
 def _pipeline_cmd(argv: list[str]) -> int:
@@ -159,7 +223,23 @@ def _pipeline_cmd(argv: list[str]) -> int:
         print("error: --out is required", file=sys.stderr)
         return 2
 
-    cfg = _cfg_from_args(args)
+    try:
+        file_values = _load_file_values(args)
+        cfg = _apply_config_file(args, argv, file_values)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    # separate is a pipeline flag: file value applies unless set on the CLI.
+    separate = args.separate
+    if "separate" not in _explicit_cli_keys(argv) and "separate" in file_values:
+        separate = bool(file_values["separate"])
+
+    on_stage = None
+    if args.progress:
+        from .progress import stage_reporter
+        on_stage = stage_reporter(pipeline.STAGES)
+
     print(f"Pianoizer: {args.source} -> {args.out}")
     print("Note: transcription is approximate; see DESIGN.md for limitations.")
     try:
@@ -168,8 +248,10 @@ def _pipeline_cmd(argv: list[str]) -> int:
             work_dir=args.work_dir,
             from_stage=args.from_stage,
             keep_work=args.keep_work,
-            separate=args.separate,
+            separate=separate,
             midi_only=args.midi_only,
+            on_stage=on_stage,
+            progress=args.progress,
         )
     except ModuleNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)

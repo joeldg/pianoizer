@@ -37,3 +37,40 @@ def test_frame_changes_over_time():
     a = render_frame(_notes(), t=0.6, cfg=cfg).tobytes()
     b = render_frame(_notes(), t=1.4, cfg=cfg).tobytes()
     assert a != b  # animation actually moves
+
+
+def test_title_card_truncates_long_title():
+    from pianoizer.stages.render import title_card_frames, _truncate_to_width
+    from pianoizer.config import RenderConfig
+    from PIL import Image, ImageDraw
+    import pianoizer.drawing as d
+    cfg = RenderConfig(width=320, height=180, fps=10)
+    frames = list(title_card_frames(cfg, "X" * 500, seconds=0.5))
+    assert len(frames) == 5
+    assert all(f.size == (320, 180) for f in frames)
+    # pure truncation helper never exceeds the width budget
+    img = Image.new("RGB", (320, 180))
+    draw = ImageDraw.Draw(img)
+    font = d.load_font(24, bold=True)
+    out = _truncate_to_width(draw, "Y" * 500, font, 200)
+    assert d.text_size(draw, out, font)[0] <= 200
+    assert out.endswith("\u2026")
+
+
+def test_title_card_fades_from_black():
+    from pianoizer.stages.render import title_card_frames
+    from pianoizer.config import RenderConfig
+    cfg = RenderConfig(width=64, height=48, fps=10)
+    frames = list(title_card_frames(cfg, "Hi", seconds=1.0))
+    # first frame is closer to black than a mid frame
+    first_mean = sum(frames[0].convert("L").tobytes()) / (64 * 48)
+    mid_mean = sum(frames[len(frames) // 2].convert("L").tobytes()) / (64 * 48)
+    assert first_mean <= mid_mean
+
+
+def test_title_card_hands_legend_runs():
+    from pianoizer.stages.render import title_card_frames
+    from pianoizer.config import RenderConfig
+    cfg = RenderConfig(width=320, height=180, fps=10, hands=True)
+    frames = list(title_card_frames(cfg, "Song", subtitle="C major | 120 BPM", seconds=0.5))
+    assert len(frames) == 5

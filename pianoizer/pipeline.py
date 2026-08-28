@@ -16,6 +16,7 @@ import json
 import re
 import shutil
 from pathlib import Path
+from typing import Callable
 
 from . import stages
 from .config import RenderConfig
@@ -62,6 +63,8 @@ def run_pipeline(
     keep_work: bool = False,
     separate: bool = False,
     midi_only: bool = False,
+    on_stage: "Callable[[str], None] | None" = None,
+    progress: bool = False,
 ) -> str:
     """Run the full pipeline for ``source`` and write the video to ``out_path``.
 
@@ -86,6 +89,10 @@ def run_pipeline(
     work = Path(work_dir) if work_dir else Path("work") / _job_id(source)
     work.mkdir(parents=True, exist_ok=True)
 
+    def _notify(stage: str) -> None:
+        if on_stage is not None:
+            on_stage(stage)
+
     audio_path = work / AUDIO
     notes_path = work / NOTES
     cleaned_path = work / CLEANED
@@ -94,6 +101,7 @@ def run_pipeline(
     # --- Stage 1: fetch --------------------------------------------------
     meta: dict = {}
     if _should_run("fetch", audio_path, from_stage):
+        _notify("fetch")
         result = stages.fetch.fetch(source, str(work))
         audio_path = Path(result.audio_path)
         meta = result.meta
@@ -103,6 +111,7 @@ def run_pipeline(
     # --- Stage 2: separate (optional; M3) --------------------------------
     stem_path = work / STEM
     if separate and _should_run("separate", stem_path, from_stage):
+        _notify("separate")
         produced = stages.separate.separate(str(audio_path), str(work))
         if Path(produced) != stem_path:
             shutil.copyfile(produced, stem_path)
@@ -110,6 +119,7 @@ def run_pipeline(
 
     # --- Stage 3: transcribe --------------------------------------------
     if _should_run("transcribe", notes_path, from_stage):
+        _notify("transcribe")
         produced = stages.transcribe.transcribe(str(transcribe_input), str(work))
         if Path(produced) != notes_path:
             shutil.copyfile(produced, notes_path)
@@ -118,6 +128,7 @@ def run_pipeline(
     # Hand assignment is applied at render time (MIDI cannot store it), so the
     # cached cleaned.mid stays a plain, reusable artifact.
     if _should_run("postprocess", cleaned_path, from_stage):
+        _notify("postprocess")
         if config.clean:
             from .stages.postprocess import postprocess
             notes = postprocess(load_midi(str(notes_path)))
@@ -130,7 +141,8 @@ def run_pipeline(
 
     # --- Stage 5+6: render + mux ----------------------------------------
     output_path = work / OUTPUT
-    if _should_run("render", output_path, from_stage) or _should_run("mux", output_path, from_stage):
+    if (_should_run("render", output_path, from_stage)
+            or _should_run("mux", output_path, from_stage)):
         notes = load_midi(str(cleaned_path))
         if config.hands:
             # MIDI does not store hand; re-derive on load so cached resume works.
@@ -148,12 +160,30 @@ def run_pipeline(
             if desc:
                 parts.append(desc)
         subtitle = "  |  ".join(parts)
+        _notify("render")
         frames = stages.render.all_frames(notes, config, title=title, subtitle=subtitle)
-        stages.mux.encode(
-            frames, str(output_path),
-            width=config.width, height=config.height, fps=config.fps,
-            audio_path=str(audio_path) if audio_path.exists() else None,
-        )
+
+        on_frame = None
+        bar = None
+        if progress:
+            from .progress import Progress
+            from .stages.render import song_duration
+            total = int(
+                (config.lead_time + song_duration(notes) + 3.0 + 3.0) * config.fps
+            )
+            bar = Progress(total=total, label="encoding", enabled=True)
+            on_frame = bar.update
+        _notify("mux")
+        try:
+            stages.mux.encode(
+                frames, str(output_path),
+                width=config.width, height=config.height, fps=config.fps,
+                audio_path=str(audio_path) if audio_path.exists() else None,
+                on_frame=on_frame,
+            )
+        finally:
+            if bar is not None:
+                bar.close()
 
     # Copy the job output to the user-requested destination.
     final = Path(out_path)
