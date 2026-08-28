@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import io
 
-from pianoizer.progress import Progress, render_bar, stage_reporter
+from pianoizer.progress import (
+    Progress,
+    frame_progress_callback,
+    render_bar,
+    span_progress,
+    stage_reporter,
+)
 
 
 def test_render_bar_empty() -> None:
@@ -135,3 +141,54 @@ def test_stage_reporter_unknown_stage() -> None:
     report = stage_reporter(["a", "b"], stream=buf)
     report("zzz")
     assert "[-/2] zzz" in buf.getvalue()
+
+
+def test_span_progress_bounds() -> None:
+    # At zero frames we sit exactly at the base.
+    assert span_progress(0, 100, 0.6, 0.4) == 0.6
+    # At full frames we reach base + span.
+    assert span_progress(100, 100, 0.6, 0.4) == 0.6 + 0.4
+    # Halfway is halfway across the span.
+    assert span_progress(50, 100, 0.6, 0.4) == 0.6 + 0.5 * 0.4
+
+
+def test_span_progress_monotonic_within_span() -> None:
+    prev = -1.0
+    for done in range(101):
+        val = span_progress(done, 100, 0.6, 0.4)
+        assert val >= prev
+        assert 0.6 <= val <= 0.6 + 0.4 + 1e-9
+        prev = val
+
+
+def test_span_progress_clamps() -> None:
+    # Overshooting frames_done clamps to base + span.
+    assert span_progress(200, 100, 0.6, 0.4) == 0.6 + 0.4
+    # Negative frames_done clamps to base.
+    assert span_progress(-10, 100, 0.6, 0.4) == 0.6
+    # Non-positive total yields the base (no fine info yet).
+    assert span_progress(5, 0, 0.6, 0.4) == 0.6
+    assert span_progress(5, -3, 0.6, 0.4) == 0.6
+
+
+def test_frame_progress_callback_updates_monotonically() -> None:
+    seen: list[float] = []
+    cb = frame_progress_callback(
+        4, stage_base=0.6, stage_span=0.4, set_progress=seen.append
+    )
+    for _ in range(4):
+        cb()
+    assert seen == sorted(seen)
+    assert seen[0] > 0.6  # first frame advances past the base
+    assert seen[-1] == 0.6 + 0.4  # last frame reaches base + span
+    assert all(0.6 <= v <= 0.6 + 0.4 + 1e-9 for v in seen)
+
+
+def test_frame_progress_callback_zero_total_stays_at_base() -> None:
+    seen: list[float] = []
+    cb = frame_progress_callback(
+        0, stage_base=0.6, stage_span=0.4, set_progress=seen.append
+    )
+    cb()
+    cb()
+    assert seen == [0.6, 0.6]

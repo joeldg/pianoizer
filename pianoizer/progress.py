@@ -17,9 +17,90 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Callable
-from typing import Self, TextIO
+from typing import Any, Self, TextIO
 
-__all__ = ["Progress", "render_bar", "stage_reporter"]
+__all__ = [
+    "Progress",
+    "frame_progress_callback",
+    "render_bar",
+    "span_progress",
+    "stage_reporter",
+]
+
+
+def span_progress(
+    frames_done: int,
+    frames_total: int,
+    stage_base: float,
+    stage_span: float,
+) -> float:
+    """Map per-frame counts onto a fractional slice of an overall progress bar.
+
+    The render/mux stages know their total frame count. This helper turns a
+    running ``frames_done``/``frames_total`` count into an overall progress
+    fraction that lives inside ``[stage_base, stage_base + stage_span]`` -- so a
+    caller can report FINE progress within, say, the last 40% of the bar while
+    the earlier stages own the first 60%.
+
+    The result is monotonically non-decreasing in ``frames_done`` and always
+    clamped to ``[stage_base, stage_base + stage_span]``.
+
+    Args:
+        frames_done: Number of frames encoded so far. Clamped to
+            ``[0, frames_total]``.
+        frames_total: Total number of frames. Values ``<= 0`` yield
+            ``stage_base`` (no fine information yet).
+        stage_base: Overall fraction (0..1) at which this stage starts.
+        stage_span: Width (0..1) of this stage's slice of the overall bar.
+
+    Returns:
+        An overall progress fraction clamped to
+        ``[stage_base, stage_base + stage_span]``.
+    """
+    lo = stage_base
+    hi = stage_base + stage_span
+    if frames_total <= 0:
+        return lo
+    fraction = frames_done / frames_total
+    fraction = min(1.0, max(0.0, fraction))
+    value = stage_base + fraction * stage_span
+    return min(hi, max(lo, value))
+
+
+def frame_progress_callback(
+    frames_total: int,
+    *,
+    stage_base: float,
+    stage_span: float,
+    set_progress: Callable[[float], None],
+) -> Callable[[], None]:
+    """Return an ``on_frame``-compatible callback that reports fine progress.
+
+    The returned zero-argument callable is suitable to pass straight to
+    :func:`pianoizer.stages.mux.encode` as its ``on_frame`` argument. Each call
+    advances an internal frame counter, maps it through :func:`span_progress`,
+    and hands the resulting overall fraction to ``set_progress`` (e.g. a closure
+    that assigns ``job.progress`` under the job lock).
+
+    Args:
+        frames_total: Total number of frames expected (as computed by the
+            pipeline). Non-positive values make every call report ``stage_base``.
+        stage_base: Overall fraction (0..1) at which the render/mux span starts.
+        stage_span: Width (0..1) of the render/mux span within the overall bar.
+        set_progress: Sink called with the new overall fraction each frame.
+
+    Returns:
+        A ``Callable[[], None]`` to hand to ``mux.encode(on_frame=...)``.
+    """
+    state: dict[str, Any] = {"done": 0}
+
+    def on_frame() -> None:
+        state["done"] += 1
+        set_progress(
+            span_progress(state["done"], frames_total, stage_base, stage_span)
+        )
+
+    return on_frame
 
 
 def render_bar(done: int, total: int, width: int = 30) -> str:

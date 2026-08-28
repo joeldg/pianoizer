@@ -146,12 +146,52 @@ function jobSignature(job) {
     displayPct(job);
 }
 
+// Update just the progress bar (fill width + label) of an existing row in
+// place. This keeps the CSS width transition smooth for fine-grained per-frame
+// progress instead of tearing down and rebuilding the row each poll (which
+// would reset the transition and any playing <video>).
+function updateBarInPlace(li, job) {
+  const bar = li.querySelector(".bar");
+  if (!bar) return false;
+  const fill = bar.querySelector("span");
+  const label = bar.querySelector(".bar-label");
+  if (!fill || !label) return false;
+  const shownPct = displayPct(job);
+  const queued = job.status === "queued";
+  bar.className = "bar" + (queued ? " queued" : "");
+  bar.setAttribute("aria-valuenow", String(shownPct));
+  fill.style.width = shownPct + "%";
+  let barText;
+  if (job.stage) {
+    const step = stageStep(job.stage);
+    const stepTxt = step ? " \u00b7 step " + step + " of " + STAGES.length : "";
+    barText = stageLabel(job.stage) + stepTxt + " \u00b7 " + shownPct + "%";
+  } else {
+    barText = (job.status || "queued") + " \u00b7 " + shownPct + "%";
+  }
+  label.textContent = barText;
+  return true;
+}
+
 function renderJob(job) {
   if (hidden.has(job.id)) return;
   const sig = jobSignature(job);
   const existing = document.getElementById("job-" + job.id);
   if (existing && renderedSig.get(job.id) === sig) {
     return; // Nothing changed for this row; leave its DOM (and video) alone.
+  }
+  // Fast path: only the (fine) progress moved within the same active status +
+  // stage. Update the bar in place so the fill animates smoothly and we do not
+  // rebuild the whole row (and its stepper/detail) on every per-frame tick.
+  const prevSig = renderedSig.get(job.id);
+  if (existing && isActive(job) && job.status !== "queued" &&
+      typeof prevSig === "string") {
+    const prevHead = prevSig.split("|").slice(0, 2).join("|");
+    const curHead = sig.split("|").slice(0, 2).join("|");
+    if (prevHead === curHead && updateBarInPlace(existing, job)) {
+      renderedSig.set(job.id, sig);
+      return;
+    }
   }
   renderedSig.set(job.id, sig);
   let li = document.getElementById("job-" + job.id);
