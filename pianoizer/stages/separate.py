@@ -38,6 +38,33 @@ _MISSING_DEP_MSG = (
 )
 
 
+def _demucs_device(torch) -> str:
+    """Pick the fastest available torch device for demucs.
+
+    Prefers Apple's Metal (``mps``) backend on M-series Macs, then CUDA, then
+    CPU. An explicit override is honored via the ``PIANOIZER_DEMUCS_DEVICE``
+    environment variable (e.g. ``cpu`` to force the reproducible path). Any
+    unavailable/failed probe falls back to CPU so separation never crashes on
+    device selection.
+    """
+    import os as _os
+
+    override = _os.environ.get("PIANOIZER_DEMUCS_DEVICE", "").strip().lower()
+    if override:
+        return override
+    try:
+        if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    try:
+        if torch.cuda.is_available():
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def _run_demucs(audio_path: str, wanted: list[str]):
     """Run demucs once and return ``(estimates, sources, samplerate)``.
 
@@ -106,8 +133,14 @@ def _run_demucs(audio_path: str, wanted: list[str]):
     ref = wav.mean(0)
     wav = (wav - ref.mean()) / (ref.std() + 1e-8)
 
+    device = _demucs_device(torch)
     with torch.no_grad():
-        estimates = apply_model(model, wav[None], device="cpu")[0]
+        estimates = apply_model(model, wav[None], device=device)[0]
+
+    # apply_model returns a tensor on ``device``; move back to CPU for the
+    # numpy/torchaudio save path below.
+    if device != "cpu":
+        estimates = estimates.to("cpu")
 
     estimates = estimates * ref.std() + ref.mean()
     return estimates, sources, model.samplerate

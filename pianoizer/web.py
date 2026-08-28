@@ -95,6 +95,10 @@ def _config_from_options(options: dict[str, Any]) -> RenderConfig:
         fields["particle_intensity"] = max(0.0, min(1.0, float(options["particle_intensity"])))
     if options.get("hand_split") is not None:
         fields["hand_split"] = bool(options["hand_split"])
+    if options.get("hw_encode") is not None:
+        fields["hw_encode"] = bool(options["hw_encode"])
+    if options.get("encode_bitrate"):
+        fields["encode_bitrate"] = str(options["encode_bitrate"])
     return RenderConfig(**fields)
 
 

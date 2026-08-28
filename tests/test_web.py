@@ -271,6 +271,7 @@ def test_index_exposes_m6_options(client):
         "transcribe_preset", "snap_timing", "theme", "glow", "glow_intensity",
         "trail", "trail_length", "keypress_flash", "flash_ripple",
         "fingering", "particles", "particle_intensity", "hand_split",
+        "hw_encode", "encode_bitrate",
     ):
         assert f'id="{control_id}"' in html, control_id
 
@@ -305,6 +306,8 @@ def test_m6_options_flow_to_config(monkeypatch):
             "particles": True,
             "particle_intensity": 1.5,
             "hand_split": True,
+            "hw_encode": True,
+            "encode_bitrate": "8M",
         }
         resp = c.post("/api/jobs", json=body)
         assert resp.status_code == 202
@@ -323,6 +326,7 @@ def test_m6_options_flow_to_config(monkeypatch):
     assert cfg.fingering is True and cfg.hand_split is True
     assert cfg.particles is True
     assert cfg.particle_intensity == 1.0  # clamped from 1.5
+    assert cfg.hw_encode is True and cfg.encode_bitrate == "8M"
     assert captured["kwargs"].get("separate") is True
 
 

@@ -125,6 +125,8 @@ system install is required for rendering.
     #   --particles           particle burst when a note lands
     #   --particle-intensity  particle peak alpha/count in [0,1] (default 0.6)
     #   --hand-split          split falling notes into left/right lanes
+    #   --hw-encode           Apple VideoToolbox HW H.264 encode (faster on M-series)
+    #   --encode-bitrate RATE target bitrate for --hw-encode, e.g. 8M
     # (plus the render flags above: --keys/--fps/--lead-time/--title/...)
 
 ## Transcription quality
