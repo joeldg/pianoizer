@@ -69,6 +69,15 @@ Positional: `midi` — path to a `.mid` file.
   (tune with `--particle-intensity` in `[0, 1]`, default `0.6`).
 * `--hand-split` — route left/right-hand notes into separate falling lanes so
   same-pitch notes from different hands do not overlap while descending.
+* `--fit-keys` — trim unused keys at the far left/right down to the song's
+  actual pitch range (padded and snapped outward to whole octaves). Fewer keys
+  span the same width, so the used keys — and their note letters — render much
+  larger. Off by default.
+* `--fit-pad N` — semitones of margin kept on each side when `--fit-keys` is on
+  (default `2`).
+* `--label-scale F` — multiplier on the key note-letter (A–G) font size
+  (default `1.0`; e.g. `1.5` for bigger letters). Works with or without
+  `--fit-keys`.
 
 ### Render-only flags
 
