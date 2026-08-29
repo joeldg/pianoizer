@@ -436,6 +436,10 @@ form.addEventListener("submit", async (ev) => {
       hands: $("hands").checked,
       key_tempo: $("key_tempo").checked,
       separate: $("separate").checked,
+      // Playability simplification.
+      simplify: $("simplify").checked,
+      max_hand_notes: parseInt($("max_hand_notes").value, 10),
+      hand_span: parseInt($("hand_span").value, 10),
       // M6 transcription quality.
       transcribe_preset: $("transcribe_preset").value,
       snap_timing: parseFloat($("snap_timing").value) || 0,
