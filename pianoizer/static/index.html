@@ -45,6 +45,17 @@
         <label><input id="hands" type="checkbox" /> Colour hands (L/R)</label>
         <label><input id="key_tempo" type="checkbox" /> Show key &amp; tempo</label>
         <label><input id="separate" type="checkbox" /> Separate stems</label>
+        <label><input id="simplify" type="checkbox" /> Simplify (playable hands)</label>
+      </div>
+      <div class="row">
+        <label class="field small">
+          <span>Max notes / hand</span>
+          <input id="max_hand_notes" type="number" min="1" max="10" step="1" value="5" />
+        </label>
+        <label class="field small">
+          <span>Hand span (semitones)</span>
+          <input id="hand_span" type="number" min="1" max="24" step="1" value="14" />
+        </label>
       </div>
 
       <details class="opts">

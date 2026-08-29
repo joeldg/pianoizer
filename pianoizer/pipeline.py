@@ -152,8 +152,13 @@ def run_pipeline(
     if _should_run("postprocess", cleaned_path, from_stage):
         _notify("postprocess")
         if config.clean:
-            from .stages.postprocess import postprocess
-            notes = postprocess(load_midi(str(notes_path)))
+            from .stages.postprocess import PostProcessConfig, postprocess
+            pp_cfg = PostProcessConfig(
+                simplify=getattr(config, "simplify", False),
+                max_hand_notes=getattr(config, "max_hand_notes", 5),
+                hand_span=getattr(config, "hand_span", 14),
+            )
+            notes = postprocess(load_midi(str(notes_path)), pp_cfg)
             save_midi(notes, str(cleaned_path))
         else:
             shutil.copyfile(notes_path, cleaned_path)

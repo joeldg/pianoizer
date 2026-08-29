@@ -129,3 +129,75 @@ def test_idempotence_with_quantize_and_polyphony():
     once = postprocess(notes, cfg)
     twice = postprocess(once, cfg)
     assert once == twice
+
+
+# ------------------------------------------------------------------ simplify
+
+def _n(pitch, start=0.0, end=1.0, vel=90):
+    return Note(start=start, end=end, pitch=pitch, velocity=vel)
+
+
+def test_simplify_caps_notes_per_hand():
+    # 6 left-hand + 6 right-hand notes sounding at once; cap 5/hand -> <= 10.
+    notes = [_n(p) for p in (36, 40, 43, 47, 50, 53,   # left cluster
+                             72, 76, 79, 83, 86, 89)]  # right cluster
+    cfg = PostProcessConfig(simplify=True, max_hand_notes=5, hand_span=24)
+    out = postprocess(notes, cfg)
+    # No instant has more than 5 notes per hand.
+    from pianoizer.hands import assign_hands
+    hinted = {id(o): h.hand for o, h in zip(out, assign_hands(out))}
+    left = [o for o in out if hinted[id(o)] == "L"]
+    right = [o for o in out if hinted[id(o)] == "R"]
+    assert len(left) <= 5 and len(right) <= 5
+    assert len(out) < len(notes)
+
+
+def test_simplify_keeps_melody_and_bass():
+    # Bass = lowest note; melody = highest note. Both must survive a cull,
+    # even when they are the quietest notes in their hand.
+    notes = [
+        _n(36, vel=10),   # bass, quiet
+        _n(40, vel=120), _n(43, vel=120), _n(48, vel=120),
+        _n(52, vel=120), _n(55, vel=120),   # loud inner left voices
+        _n(72, vel=120), _n(76, vel=120), _n(79, vel=120),
+        _n(84, vel=120), _n(88, vel=120),
+        _n(96, vel=10),   # melody (top), quiet
+    ]
+    cfg = PostProcessConfig(simplify=True, max_hand_notes=3, hand_span=24)
+    out = postprocess(notes, cfg)
+    kept = {o.pitch for o in out}
+    assert 36 in kept, "bass must be kept"
+    assert 96 in kept, "melody (top note) must be kept"
+
+
+def test_simplify_respects_hand_span():
+    # A note far outside the reachable window is dropped unless it is an anchor.
+    # Cluster 60,62,64 (left/right split near 60) plus a lone 88 far above.
+    notes = [_n(58), _n(60), _n(62), _n(64), _n(66), _n(68), _n(70)]
+    cfg = PostProcessConfig(simplify=True, max_hand_notes=3, hand_span=4)
+    out = postprocess(notes, cfg)
+    # With span 4 semitones, each hand can only keep notes within 4 of its
+    # anchor, so total kept is well under the input.
+    assert len(out) < len(notes)
+
+
+def test_simplify_noop_when_already_thin():
+    notes = [_n(48), _n(60), _n(72)]  # 1-2 per hand, easily playable
+    cfg = PostProcessConfig(simplify=True, max_hand_notes=5, hand_span=14)
+    out = postprocess(notes, cfg)
+    assert {o.pitch for o in out} == {48, 60, 72}
+
+
+def test_simplify_off_by_default_keeps_all():
+    notes = [_n(p) for p in (36, 40, 43, 48, 52, 60, 64, 67, 72, 79, 84, 91)]
+    out = postprocess(notes, PostProcessConfig())  # simplify defaults False
+    assert len(out) == len(notes)
+
+
+def test_simplify_preserves_time_ordering_and_purity():
+    notes = [_n(60, start=1.0), _n(48, start=0.0), _n(72, start=0.5)]
+    before = [(n.start, n.pitch) for n in notes]
+    out = postprocess(notes, PostProcessConfig(simplify=True))
+    assert [n.start for n in out] == sorted(n.start for n in out)
+    # inputs not mutated
+    assert [(n.start, n.pitch) for n in notes] == before

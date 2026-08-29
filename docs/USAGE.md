@@ -64,6 +64,16 @@ Positional: `midi` — path to a `.mid` file.
 * `--hands` — colorize notes by estimated hand (left = red, right = green).
 * `--key-tempo` — show the estimated key + tempo on the title card.
 * `--no-clean` — skip MIDI post-processing (keep the raw notes).
+* `--simplify` — reduce dense chords to something two hands can actually play.
+  Notes are split into left/right hands; at every onset each hand is limited to
+  `--max-hand-notes` notes lying within `--hand-span` semitones of that hand's
+  anchor. The melody (top note of the right hand) and the bass (lowest note)
+  are always kept; remaining slots prefer onset and louder notes. Off by
+  default; drop-only and deterministic.
+* `--max-hand-notes N` — max simultaneous notes per hand for `--simplify`
+  (default `5`, i.e. one per finger).
+* `--hand-span SEMI` — reachable window per hand in semitones for `--simplify`
+  (default `14`, about a 9th).
 * `--fingering` — draw suggested finger numbers (1-5) on each note block.
 * `--particles` — emit a short particle burst when a note lands
   (tune with `--particle-intensity` in `[0, 1]`, default `0.6`).

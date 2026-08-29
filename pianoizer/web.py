@@ -105,6 +105,12 @@ def _config_from_options(options: dict[str, Any]) -> RenderConfig:
         fields["hw_encode"] = bool(options["hw_encode"])
     if options.get("encode_bitrate"):
         fields["encode_bitrate"] = str(options["encode_bitrate"])
+    if options.get("simplify") is not None:
+        fields["simplify"] = bool(options["simplify"])
+    if options.get("max_hand_notes") is not None:
+        fields["max_hand_notes"] = max(1, min(10, int(options["max_hand_notes"])))
+    if options.get("hand_span") is not None:
+        fields["hand_span"] = max(1, min(24, int(options["hand_span"])))
     return RenderConfig(**fields)
 
 

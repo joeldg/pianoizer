@@ -273,6 +273,7 @@ def test_index_exposes_m6_options(client):
         "fingering", "particles", "particle_intensity", "hand_split",
         "hw_encode", "encode_bitrate",
         "fit_keys", "fit_pad", "label_scale",
+        "simplify", "max_hand_notes", "hand_span",
     ):
         assert f'id="{control_id}"' in html, control_id
 
@@ -312,6 +313,9 @@ def test_m6_options_flow_to_config(monkeypatch):
             "fit_keys": True,
             "fit_pad": 3,
             "label_scale": 1.5,
+            "simplify": True,
+            "max_hand_notes": 4,
+            "hand_span": 12,
         }
         resp = c.post("/api/jobs", json=body)
         assert resp.status_code == 202
@@ -332,6 +336,7 @@ def test_m6_options_flow_to_config(monkeypatch):
     assert cfg.particle_intensity == 1.0  # clamped from 1.5
     assert cfg.hw_encode is True and cfg.encode_bitrate == "8M"
     assert cfg.fit_keys is True and cfg.fit_pad == 3 and cfg.label_scale == 1.5
+    assert cfg.simplify is True and cfg.max_hand_notes == 4 and cfg.hand_span == 12
     assert captured["kwargs"].get("separate") is True
 
 

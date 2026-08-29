@@ -17,6 +17,10 @@ class RenderConfig(BaseModel):
     hands: bool = False             # colorize notes by estimated hand (L/R)
     show_key_tempo: bool = False    # append estimated key/tempo to the subtitle
     clean: bool = True              # run MIDI post-processing before render
+    # Playability simplification (opt-in): reduce chords to two playable hands.
+    simplify: bool = False          # limit each hand's simultaneous notes
+    max_hand_notes: int = 5         # fingers per hand
+    hand_span: int = 14             # reachable window in semitones (~a 9th)
     # M6 transcription quality.
     transcribe_preset: str = "default"  # basic-pitch threshold preset
     snap_timing: float = 0.0            # beat-snap strength [0,1]; 0 disables

@@ -33,6 +33,9 @@ def _cfg_from_args(args: argparse.Namespace) -> RenderConfig:
         hands=getattr(args, "hands", False),
         show_key_tempo=getattr(args, "key_tempo", False),
         clean=getattr(args, "clean", True),
+        simplify=getattr(args, "simplify", False),
+        max_hand_notes=getattr(args, "max_hand_notes", 5),
+        hand_span=getattr(args, "hand_span", 14),
         transcribe_preset=getattr(args, "transcribe_preset", "default"),
         snap_timing=getattr(args, "snap_timing", 0.0),
         snap_subdivision=getattr(args, "snap_subdivision", 4),
@@ -72,6 +75,15 @@ def _add_render_config_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-clean", dest="clean", action="store_false",
                         help="Skip MIDI post-processing (keep raw transcription)")
     parser.set_defaults(clean=True)
+    parser.add_argument("--simplify", action="store_true",
+                        help="Reduce dense chords to two playable hands "
+                             "(keeps melody + bass; limits notes per hand)")
+    parser.add_argument("--max-hand-notes", type=int, default=5, metavar="N",
+                        help="Max simultaneous notes per hand for --simplify "
+                             "(default 5)")
+    parser.add_argument("--hand-span", type=int, default=14, metavar="SEMI",
+                        help="Reachable window per hand in semitones for "
+                             "--simplify (default 14 ~ a 9th)")
     from .stages.transcribe import PRESETS
     parser.add_argument("--transcribe-preset", choices=sorted(PRESETS),
                         default="default",
